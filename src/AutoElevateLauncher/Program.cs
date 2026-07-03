@@ -11,7 +11,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
-        Application.Run(new Form { Text = "Auto Elevate Launcher", Width = 900, Height = 600 });
+        Application.Run(new ManagerContext());
         return 0;
     }
 }
