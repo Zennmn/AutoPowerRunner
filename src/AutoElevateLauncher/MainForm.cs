@@ -124,6 +124,7 @@ public sealed class MainForm : Form
     {
         var item = SelectedItem;
         if (item is null) return;
+        string? selectedId = item.Id;
         item.Name = _name.Text.Trim();
         item.Path = _path.Text.Trim();
         item.Arguments = _arguments.Text;
@@ -142,7 +143,16 @@ public sealed class MainForm : Form
         item.LastTaskError = result.Succeeded ? string.Empty : result.StandardError + result.StandardOutput;
         _configStore.Save(_config);
         RefreshList();
+        if (selectedId is not null)
+        {
+            _items.SelectedItem = _config.Items.FirstOrDefault(x => x.Id == selectedId);
+        }
         LoadSelectedIntoDetails();
+
+        if (!result.Succeeded)
+        {
+            MessageBox.Show(this, result.StandardError + Environment.NewLine + result.StandardOutput, "Task creation failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private async Task DeleteSelectedAsync()

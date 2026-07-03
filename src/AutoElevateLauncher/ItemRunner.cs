@@ -21,7 +21,7 @@ public sealed class ItemRunner
         }
 
         Directory.CreateDirectory(AppPaths.GetItemLogDirectory(item.Id));
-        var logPath = Path.Combine(AppPaths.GetItemLogDirectory(item.Id), DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss") + ".log");
+        var logPath = Path.Combine(AppPaths.GetItemLogDirectory(item.Id), DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss-fffffff") + ".log");
 
         item.LastRunStartedAt = DateTimeOffset.Now;
         item.LastRunFinishedAt = null;
