@@ -15,11 +15,11 @@ public sealed class MainForm : Form
     private readonly CheckBox _enabled = new() { Text = "Enabled", Dock = DockStyle.Top };
     private readonly Label _status = new() { Dock = DockStyle.Top, AutoSize = true };
 
-    public MainForm(ConfigStore configStore, ScheduledTaskService taskService)
+    public MainForm(StartupConfig config, ConfigStore configStore, ScheduledTaskService taskService)
     {
         _configStore = configStore;
         _taskService = taskService;
-        _config = _configStore.Load();
+        _config = config;
 
         Text = "Auto Elevate Launcher";
         Width = 1000;
