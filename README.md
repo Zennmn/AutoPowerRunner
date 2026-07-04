@@ -115,3 +115,7 @@ dotnet publish "src\AutoElevateLauncher\AutoElevateLauncher.csproj" -c Release -
 生成文件：
 
 `publish\win-x64-single\AutoElevateLauncher.exe`
+
+## 许可证
+
+本项目使用 MIT License 开源。详见 [LICENSE](LICENSE)。
