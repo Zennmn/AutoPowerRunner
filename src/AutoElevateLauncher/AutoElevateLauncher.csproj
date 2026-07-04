@@ -7,7 +7,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AutoElevateLauncher</AssemblyName>
     <RootNamespace>AutoElevateLauncher</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\app.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="AutoElevateLauncher.Tests" />
