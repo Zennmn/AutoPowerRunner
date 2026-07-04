@@ -1,34 +1,38 @@
-# Auto Elevate Launcher
+# 管理员自启动器
 
-Lightweight Windows tray app for automatically starting PowerShell scripts and executable programs with administrator privileges after user login.
+一个轻量 Windows 托盘工具，用于在用户登录后以管理员权限启动自身，然后自动运行已启用的 PowerShell 脚本和可执行程序。
 
-## Requirements
+## 运行要求
 
 - Windows
-- .NET 8 Desktop Runtime for framework-dependent publish builds
+- .NET 8 Desktop Runtime（框架依赖发布版本需要）
 
-## How It Works
+## 工作方式
 
-Each startup item maps to a Windows scheduled task configured to run with highest privileges at current user logon. Creating or updating an elevated task can show a UAC prompt once. Later logon-triggered runs should not show UAC again.
+软件只创建一个 Windows 计划任务：`AutoElevateLauncher-Manager`。
 
-## Data Locations
+启用"管理员开机自启"后，Windows 会在当前用户登录时以最高权限启动本软件。软件启动后读取配置，并自动运行所有已启用的启动项目。脚本和程序由已提权的软件进程启动，因此默认继承管理员权限。
 
-- Config: `%AppData%\AutoElevateLauncher\config.json`
-- Logs: `%AppData%\AutoElevateLauncher\logs\`
+## 数据位置
 
-## Usage
+- 配置：`%AppData%\AutoElevateLauncher\config.json`
+- 日志：`%AppData%\AutoElevateLauncher\logs\`
 
-1. Start `AutoElevateLauncher.exe`.
-2. Double-click the tray icon to open the manager.
-3. Add a PowerShell script or executable program.
-4. Fill in startup arguments and working directory if needed.
-5. Save the item to create or update its scheduled task.
-6. Use `Run now` and logs to verify behavior.
+## 使用方法
 
-The tray menu has a **Start tray app at login** toggle that registers a separate non-elevated logon task so the manager starts automatically. Toggle it once; creation may show a single UAC prompt.
+1. 启动 `AutoElevateLauncher.exe`。
+2. 在托盘菜单中打开管理器。
+3. 添加 PowerShell 脚本或可执行程序。
+4. 填写参数和工作目录。
+5. 勾选"启用此项目"。
+6. 点击"保存"。
+7. 启用"管理员开机自启"。首次启用可能需要确认 UAC。
 
-## Known Limitations (v1)
+下次登录时，软件会以管理员权限自动启动，并运行所有已启用项目。
 
-- **Executable items report exit code 0.** Long-running or detaching `.exe` programs are launched and their process id logged, but their final exit code is not captured; status shows `Succeeded` once the process starts.
-- **Run-status may be stale across processes.** The manager (tray/UI) and the runner (invoked by scheduled tasks) are separate processes that each read/write `config.json`. If both save near-simultaneously, one party's run-status update can be overwritten. Core auto-elevate behavior is unaffected; only the displayed last-run time/exit code may lag. A refresh (close and reopen the manager) corrects it.
-- **No log cleanup.** Logs accumulate under `%AppData%\AutoElevateLauncher\logs\` per item; manage manually for now.
+## 已知限制
+
+- 可执行程序启动成功后会记录进程 ID，并将状态视为成功；当前版本不等待长期运行程序退出，也不记录最终退出码。
+- 当前版本不可靠跟踪已启动进程，因此"停止"只提供限制说明。
+- 日志不会自动清理，会持续累积在日志目录下。
+- 旧版本创建的单项目计划任务不会自动删除；如曾使用旧版本，请在 Windows 任务计划程序中手动清理不需要的旧任务。
