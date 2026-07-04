@@ -96,7 +96,7 @@ public sealed class ManagerContext : ApplicationContext
     {
         if (_mainForm is null || _mainForm.IsDisposed)
         {
-            _mainForm = new MainForm(_config, _configStore, _taskService);
+            _mainForm = new MainForm(_config, _configStore, _taskService, _itemLauncher, _startupOrchestrator);
         }
 
         _mainForm.Show();

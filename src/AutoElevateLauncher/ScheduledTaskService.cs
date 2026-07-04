@@ -14,24 +14,6 @@ public sealed class ScheduledTaskService
         _processRunner = processRunner;
     }
 
-    public async Task<ProcessCommandResult> CreateOrUpdateStartupItemTaskAsync(StartupItem item, string appExePath, CancellationToken cancellationToken = default)
-    {
-        item.EnsureTaskName();
-        var userId = WindowsIdentity.GetCurrent().Name;
-        var xml = TaskXmlBuilder.BuildStartupItemTaskXml(item, appExePath, userId);
-        var xmlPath = Path.Combine(Path.GetTempPath(), item.TaskName + ".xml");
-        await File.WriteAllTextAsync(xmlPath, xml, Encoding.Unicode, cancellationToken);
-
-        try
-        {
-            return await _processRunner.RunAsync("schtasks.exe", $"/Create /TN \"{item.TaskName}\" /XML \"{xmlPath}\" /F", null, cancellationToken);
-        }
-        finally
-        {
-            TryDelete(xmlPath);
-        }
-    }
-
     public async Task<ProcessCommandResult> CreateOrUpdateManagerSelfStartTaskAsync(string appExePath, CancellationToken cancellationToken = default)
     {
         var userId = WindowsIdentity.GetCurrent().Name;
@@ -64,25 +46,7 @@ public sealed class ScheduledTaskService
         return _processRunner.RunElevatedAsync(appExePath, "--disable-manager-startup", cancellationToken);
     }
 
-    public Task<ProcessCommandResult> DeleteTaskAsync(StartupItem item, CancellationToken cancellationToken = default)
-    {
-        item.EnsureTaskName();
-        return _processRunner.RunAsync("schtasks.exe", $"/Delete /TN \"{item.TaskName}\" /F", null, cancellationToken);
-    }
-
-    public Task<ProcessCommandResult> RunTaskAsync(StartupItem item, CancellationToken cancellationToken = default)
-    {
-        item.EnsureTaskName();
-        return _processRunner.RunAsync("schtasks.exe", $"/Run /TN \"{item.TaskName}\"", null, cancellationToken);
-    }
-
-    public Task<ProcessCommandResult> StopTaskAsync(StartupItem item, CancellationToken cancellationToken = default)
-    {
-        item.EnsureTaskName();
-        return _processRunner.RunAsync("schtasks.exe", $"/End /TN \"{item.TaskName}\"", null, cancellationToken);
-    }
-
-    private static void TryDelete(string path)
+    public static void TryDelete(string path)
     {
         try
         {
@@ -93,7 +57,6 @@ public sealed class ScheduledTaskService
         }
         catch
         {
-            // Temporary task XML cleanup failure should not hide the schtasks result.
         }
     }
 }
