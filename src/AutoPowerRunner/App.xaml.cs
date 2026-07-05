@@ -1,4 +1,5 @@
-using System.Reflection;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -39,7 +40,7 @@ public partial class App : System.Windows.Application
             _logService = new LogService(paths);
             var configService = new TaskConfigService(paths);
             _processRunner = new ProcessRunner(_logService, uiContext);
-            var executablePath = Environment.ProcessPath ?? Assembly.GetExecutingAssembly().Location;
+            var executablePath = GetExecutablePath();
             var startupTaskService = new StartupTaskService(executablePath, _logService);
 
             _viewModel = new MainViewModel(
@@ -148,6 +149,22 @@ public partial class App : System.Windows.Application
         uiContext = new DispatcherSynchronizationContext(Dispatcher);
         SynchronizationContext.SetSynchronizationContext(uiContext);
         return uiContext;
+    }
+
+    private static string GetExecutablePath()
+    {
+        if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        {
+            return Environment.ProcessPath;
+        }
+
+        var mainModulePath = Process.GetCurrentProcess().MainModule?.FileName;
+        if (!string.IsNullOrWhiteSpace(mainModulePath))
+        {
+            return mainModulePath;
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "AutoPowerRunner.exe");
     }
 
     private void DisposeTrayIcon()
