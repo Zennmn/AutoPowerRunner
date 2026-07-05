@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AutoPowerRunner.Models;
 
 public sealed class TaskRuntimeResult
@@ -8,6 +10,7 @@ public sealed class TaskRuntimeResult
     public DateTimeOffset? ExitedAt { get; set; }
     public string? Error { get; set; }
 
+    [JsonIgnore]
     public string Summary
     {
         get
