@@ -13,6 +13,7 @@ public sealed class StartupTaskService : IStartupTaskService
     private readonly string _taskName;
     private readonly string _executablePath;
     private readonly LogService? _log;
+    private readonly Func<string, bool, CommandResult>? _commandRunner;
 
     public StartupTaskService(string executablePath, LogService? log = null, string taskName = DefaultTaskName)
     {
@@ -20,6 +21,20 @@ public sealed class StartupTaskService : IStartupTaskService
         _log = log;
         _taskName = taskName;
     }
+
+    public StartupTaskService(
+        string executablePath,
+        Func<string, bool, CommandResult> commandRunner,
+        LogService? log = null,
+        string taskName = DefaultTaskName)
+    {
+        _executablePath = executablePath;
+        _commandRunner = commandRunner;
+        _log = log;
+        _taskName = taskName;
+    }
+
+    public readonly record struct CommandResult(int ExitCode, string Output, string Error);
 
     public static string BuildCreateArguments(string taskName, string executablePath, string userName)
     {
@@ -45,6 +60,13 @@ public sealed class StartupTaskService : IStartupTaskService
         return $"/Query /TN \"{taskName}\"";
     }
 
+    public static string BuildQueryVerboseArguments(string taskName)
+    {
+        EnsureNoDoubleQuote(taskName, nameof(taskName));
+
+        return $"/Query /TN \"{taskName}\" /V /FO LIST";
+    }
+
     public static string GetSchtasksPath()
     {
         return Path.Combine(
@@ -55,15 +77,15 @@ public sealed class StartupTaskService : IStartupTaskService
 
     public bool IsEnabled()
     {
-        var result = RunSchtasks(BuildQueryArguments(_taskName), runAsAdmin: false, operation: "query", taskName: _taskName);
-        return result.ExitCode == 0;
+        var result = RunCommand(BuildQueryVerboseArguments(_taskName), runAsAdmin: false, operation: "query");
+        return result.ExitCode == 0 && QueryOutputMatchesCurrentEnabledTask(result.Output, _executablePath);
     }
 
     public void Enable()
     {
         var userName = WindowsIdentity.GetCurrent().Name;
         var args = BuildCreateArguments(_taskName, _executablePath, userName);
-        var result = RunSchtasks(args, runAsAdmin: true, operation: "create", taskName: _taskName);
+        var result = RunCommand(args, runAsAdmin: true, operation: "create");
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildExitFailureMessage("create", _taskName, result));
@@ -74,13 +96,23 @@ public sealed class StartupTaskService : IStartupTaskService
 
     public void Disable()
     {
-        var result = RunSchtasks(BuildDeleteArguments(_taskName), runAsAdmin: true, operation: "delete", taskName: _taskName);
+        var result = RunCommand(BuildDeleteArguments(_taskName), runAsAdmin: true, operation: "delete");
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildExitFailureMessage("delete", _taskName, result));
         }
 
         _log?.Info("Administrator autostart disabled.");
+    }
+
+    private CommandResult RunCommand(string arguments, bool runAsAdmin, string operation)
+    {
+        if (_commandRunner is not null)
+        {
+            return _commandRunner(arguments, runAsAdmin);
+        }
+
+        return RunSchtasks(arguments, runAsAdmin, operation, _taskName);
     }
 
     private static CommandResult RunSchtasks(string arguments, bool runAsAdmin, string operation, string taskName)
@@ -144,5 +176,43 @@ public sealed class StartupTaskService : IStartupTaskService
         return $"Failed to {operation} startup task '{taskName}'. Exit code: {result.ExitCode}. Output: {result.Output} Error: {result.Error}";
     }
 
-    private sealed record CommandResult(int ExitCode, string Output, string Error);
+    private static bool QueryOutputMatchesCurrentEnabledTask(string output, string executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return false;
+        }
+
+        var taskToRun = GetListField(output, "Task To Run");
+        var searchableOutput = taskToRun ?? output;
+        if (!searchableOutput.Contains(executablePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var status = GetListField(output, "Status");
+        return status is null || !status.Contains("Disabled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetListField(string output, string fieldName)
+    {
+        using var reader = new StringReader(output);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            var trimmed = line.TrimStart();
+            if (!trimmed.StartsWith(fieldName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var separatorIndex = trimmed.IndexOf(':');
+            if (separatorIndex >= 0)
+            {
+                return trimmed[(separatorIndex + 1)..].Trim();
+            }
+        }
+
+        return null;
+    }
 }

@@ -169,8 +169,28 @@ public sealed class MainViewModelTests
 
         Assert.Equal([first, selected, last], viewModel.Tasks);
         Assert.Same(selected, viewModel.SelectedTask);
-        Assert.Contains(selected.Id, processRunner.StoppedTaskIds);
+        Assert.DoesNotContain(selected.Id, processRunner.StoppedTaskIds);
         Assert.Contains(log.Errors, entry => entry.Message.Contains("Could not delete task 'Selected'."));
+    }
+
+    [Fact]
+    public async Task MainViewModel_DeleteSelected_WhenSaveSucceeds_StopsAfterSave()
+    {
+        var events = new List<string>();
+        var config = new FakeTaskConfigService { Events = events };
+        var processRunner = new FakeProcessRunner { Events = events };
+        var viewModel = CreateViewModel(config, processRunner);
+        var task = new ManagedTask { Name = "Selected" };
+        viewModel.Tasks.Add(task);
+        viewModel.SelectedTask = task;
+
+        viewModel.DeleteSelectedCommand.Execute(null);
+        await AwaitCommandAsync(viewModel.DeleteSelectedCommand);
+
+        Assert.Empty(viewModel.Tasks);
+        Assert.Null(viewModel.SelectedTask);
+        Assert.Equal(["save", "stop"], events);
+        Assert.Contains(task.Id, processRunner.StoppedTaskIds);
     }
 
     [Fact]
@@ -226,6 +246,46 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task MainViewModel_ProcessCallback_PersistsLastResult()
+    {
+        var config = new FakeTaskConfigService();
+        var processRunner = new FakeProcessRunner();
+        var viewModel = CreateViewModel(config, processRunner);
+        var task = new ManagedTask { IsEnabled = true };
+        viewModel.Tasks.Add(task);
+
+        viewModel.RunAllEnabled();
+        task.LastResult.Status = TaskRuntimeStatus.Exited;
+        task.LastResult.ExitCode = 0;
+        processRunner.LastUpdateCallback?.Invoke(task);
+
+        var saved = await WaitUntilAsync(() => config.SaveCount == 1);
+
+        Assert.True(saved);
+        Assert.Same(task, Assert.Single(config.LastSavedTasks));
+    }
+
+    [Fact]
+    public async Task MainViewModel_ProcessCallback_WhenSaveFails_LogsAndDoesNotThrow()
+    {
+        var config = new FakeTaskConfigService { SaveException = new IOException("save failed") };
+        var log = new FakeLogService();
+        var processRunner = new FakeProcessRunner();
+        var viewModel = CreateViewModel(config, processRunner, logService: log);
+        var task = new ManagedTask { IsEnabled = true };
+        viewModel.Tasks.Add(task);
+
+        viewModel.RunAllEnabled();
+        var exception = Record.Exception(() => processRunner.LastUpdateCallback?.Invoke(task));
+        var logged = await WaitUntilAsync(() => log.Errors.Any(entry =>
+            entry.Message.Contains("Could not save task result.") &&
+            entry.Exception is IOException));
+
+        Assert.Null(exception);
+        Assert.True(logged);
+    }
+
+    [Fact]
     public async Task AsyncRelayCommand_WhenExecuteFails_LogsAndDoesNotThrow()
     {
         var log = new FakeLogService();
@@ -264,12 +324,29 @@ public sealed class MainViewModelTests
         await asyncCommand.ExecutionTask!;
     }
 
+    private static async Task<bool> WaitUntilAsync(Func<bool> condition)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (!timeout.IsCancellationRequested)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(25, timeout.Token).ContinueWith(_ => { });
+        }
+
+        return condition();
+    }
+
     private sealed class FakeTaskConfigService : ITaskConfigService
     {
         public List<ManagedTask> TasksToLoad { get; } = [];
         public IReadOnlyCollection<ManagedTask> LastSavedTasks { get; private set; } = [];
         public int SaveCount { get; private set; }
         public Exception? SaveException { get; set; }
+        public List<string>? Events { get; set; }
 
         public Task<List<ManagedTask>> LoadAsync(CancellationToken cancellationToken = default)
         {
@@ -279,6 +356,7 @@ public sealed class MainViewModelTests
         public Task SaveAsync(IReadOnlyCollection<ManagedTask> tasks, CancellationToken cancellationToken = default)
         {
             SaveCount++;
+            Events?.Add("save");
             if (SaveException is not null)
             {
                 throw SaveException;
@@ -294,6 +372,7 @@ public sealed class MainViewModelTests
         public IReadOnlyCollection<Guid> RunningTaskIds => [];
         public List<ManagedTask> StartedTasks { get; } = [];
         public List<Guid> StoppedTaskIds { get; } = [];
+        public List<string>? Events { get; set; }
         public Action<ManagedTask>? LastUpdateCallback { get; private set; }
 
         public Process Start(ManagedTask task, Action<ManagedTask>? onUpdated = null)
@@ -305,6 +384,7 @@ public sealed class MainViewModelTests
 
         public void Stop(Guid taskId)
         {
+            Events?.Add("stop");
             StoppedTaskIds.Add(taskId);
         }
 

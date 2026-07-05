@@ -34,6 +34,76 @@ public sealed class StartupTaskServiceTests
     }
 
     [Fact]
+    public void BuildQueryVerboseArguments_BuildsVerboseListQueryCommand()
+    {
+        var args = StartupTaskService.BuildQueryVerboseArguments("AutoPowerRunner");
+
+        Assert.Equal("/Query /TN \"AutoPowerRunner\" /V /FO LIST", args);
+    }
+
+    [Fact]
+    public void IsEnabled_WhenVerboseOutputMatchesExecutablePathAndIsNotDisabled_ReturnsTrue()
+    {
+        var executablePath = @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe";
+        var commands = new List<(string Arguments, bool RunAsAdmin)>();
+        var service = new StartupTaskService(
+            executablePath,
+            commandRunner: (arguments, runAsAdmin) =>
+            {
+                commands.Add((arguments, runAsAdmin));
+                return new StartupTaskService.CommandResult(0, $"""
+                    Folder: \
+                    TaskName: AutoPowerRunner
+                    Task To Run: "{executablePath}"
+                    Status: Ready
+                    Run Level: Highest
+                    """, "");
+            });
+
+        var enabled = service.IsEnabled();
+
+        Assert.True(enabled);
+        Assert.Equal([(StartupTaskService.BuildQueryVerboseArguments("AutoPowerRunner"), false)], commands);
+    }
+
+    [Fact]
+    public void IsEnabled_WhenVerboseOutputContainsOldExecutablePath_ReturnsFalse()
+    {
+        var service = new StartupTaskService(
+            @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe",
+            commandRunner: (_, _) => new StartupTaskService.CommandResult(0, """
+                Folder: \
+                TaskName: AutoPowerRunner
+                Task To Run: "C:\Old\AutoPowerRunner.exe"
+                Status: Ready
+                Run Level: Highest
+                """, ""));
+
+        var enabled = service.IsEnabled();
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
+    public void IsEnabled_WhenVerboseOutputStatusIsDisabled_ReturnsFalse()
+    {
+        var executablePath = @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe";
+        var service = new StartupTaskService(
+            executablePath,
+            commandRunner: (_, _) => new StartupTaskService.CommandResult(0, $"""
+                Folder: \
+                TaskName: AutoPowerRunner
+                Task To Run: "{executablePath}"
+                Status: Disabled
+                Run Level: Highest
+                """, ""));
+
+        var enabled = service.IsEnabled();
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
     public void BuildCreateArguments_RejectsQuotesInTaskName()
     {
         var exception = Assert.Throws<ArgumentException>(() => StartupTaskService.BuildCreateArguments(

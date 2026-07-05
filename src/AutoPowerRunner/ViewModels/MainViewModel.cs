@@ -191,7 +191,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        _processRunner.Stop(task.Id);
         Tasks.RemoveAt(index);
         SelectedTask = null;
         try
@@ -203,7 +202,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Tasks.Insert(Math.Min(index, Tasks.Count), task);
             SelectedTask = task;
             _logService.Error($"Could not delete task '{task.Name}'.", ex);
+            return;
         }
+
+        _processRunner.Stop(task.Id);
     }
 
     private async Task ToggleSelectedEnabledAsync()
@@ -273,6 +275,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void NotifyTasksChangedFromProcessCallback()
     {
+        _ = SaveTaskResultFromProcessCallbackAsync();
+
         void Notify()
         {
             try
@@ -298,6 +302,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             _logService.Error("Could not dispatch task update notification.", ex);
+        }
+    }
+
+    private async Task SaveTaskResultFromProcessCallbackAsync()
+    {
+        try
+        {
+            await SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            _logService.Error("Could not save task result.", ex);
         }
     }
 
