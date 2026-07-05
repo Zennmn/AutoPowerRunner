@@ -50,10 +50,7 @@ public partial class TaskEditorWindow : Window
         }
 
         PathBox.Text = dialog.FileName;
-        if (string.IsNullOrWhiteSpace(WorkingDirectoryBox.Text))
-        {
-            WorkingDirectoryBox.Text = Path.GetDirectoryName(dialog.FileName) ?? "";
-        }
+        WorkingDirectoryBox.Text = Path.GetDirectoryName(dialog.FileName) ?? "";
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
