@@ -29,4 +29,19 @@ public sealed class AppStartupOptionsTests
     {
         Assert.Equal(expected, App.BuildTrayAutostartMenuText(isEnabled));
     }
+
+    [Fact]
+    public void GetAuthorizedConfigHash_ReturnsValueFollowingArgument()
+    {
+        Assert.Equal("ABC123", App.GetAuthorizedConfigHash(["--silent-startup", "--authorized-config-hash", "ABC123"]));
+        Assert.Null(App.GetAuthorizedConfigHash(["--silent-startup"]));
+    }
+
+    [Fact]
+    public void ShouldRunEnabledTasks_RequiresSilentStartupAndAuthorizationHash()
+    {
+        Assert.False(App.ShouldRunEnabledTasks([]));
+        Assert.False(App.ShouldRunEnabledTasks(["--silent-startup"]));
+        Assert.True(App.ShouldRunEnabledTasks(["--silent-startup", "--authorized-config-hash", "ABC123"]));
+    }
 }

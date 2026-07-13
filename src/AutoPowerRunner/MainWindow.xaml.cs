@@ -4,7 +4,6 @@ using System.IO;
 using System.Windows;
 using AutoPowerRunner.Models;
 using AutoPowerRunner.ViewModels;
-using Forms = System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
@@ -122,52 +121,6 @@ public partial class MainWindow : Window
         {
             ShowError("无法打开日志文件。", ex);
         }
-    }
-
-    private void BrowseTarget_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel.SelectedTask is null)
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            FileName = _viewModel.SelectedTask.Path,
-            Filter = GetFileFilter(_viewModel.SelectedTask.Type)
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        _viewModel.SelectedTask.Path = dialog.FileName;
-        _viewModel.SelectedTask.WorkingDirectory = Path.GetDirectoryName(dialog.FileName) ?? "";
-    }
-
-    private void BrowseWorkingDirectory_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel.SelectedTask is null)
-        {
-            return;
-        }
-
-        using var dialog = new Forms.FolderBrowserDialog
-        {
-            Description = "选择工作目录",
-            SelectedPath = Directory.Exists(_viewModel.SelectedTask.WorkingDirectory)
-                ? _viewModel.SelectedTask.WorkingDirectory
-                : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            UseDescriptionForTitle = true
-        };
-
-        if (dialog.ShowDialog() != Forms.DialogResult.OK)
-        {
-            return;
-        }
-
-        _viewModel.SelectedTask.WorkingDirectory = dialog.SelectedPath;
     }
 
     protected override void OnClosing(CancelEventArgs e)

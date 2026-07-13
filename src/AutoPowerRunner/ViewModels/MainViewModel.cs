@@ -18,6 +18,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly bool _isRunningAsAdministrator;
     private ManagedTask? _selectedTask;
     private bool _isAdministratorAutostartEnabled;
+    private string _statusMessage = "就绪";
 
     public MainViewModel(
         ITaskConfigService configService,
@@ -37,25 +38,29 @@ public sealed class MainViewModel : INotifyPropertyChanged
         SaveCommand = new AsyncRelayCommand(
             _ => SaveAsync(),
             _logService,
-            "无法保存任务。");
-        RunSelectedCommand = new RelayCommand(_ => RunSelected(), _ => SelectedTask is not null);
-        StopSelectedCommand = new RelayCommand(_ => StopSelected(), _ => SelectedTask is not null);
+            "无法保存任务。",
+            errorSink: ReportError);
+        RunSelectedCommand = new RelayCommand(_ => RunSelected(), _ => CanRunSelected());
+        StopSelectedCommand = new RelayCommand(_ => StopSelected(), _ => CanStopSelected());
         DeleteSelectedCommand = new AsyncRelayCommand(
             _ => DeleteSelectedAsync(),
             _logService,
             "无法删除选中的任务。",
-            _ => SelectedTask is not null);
+            _ => SelectedTask is not null,
+            ReportError);
         ToggleSelectedEnabledCommand = new AsyncRelayCommand(
             _ => ToggleSelectedEnabledAsync(),
             _logService,
             "无法更新选中的任务。",
-            _ => SelectedTask is not null);
+            _ => SelectedTask is not null,
+            ReportError);
         RunAllEnabledCommand = new RelayCommand(_ => RunAllEnabled());
         StopAllCommand = new RelayCommand(_ => StopAll());
         ToggleAutostartCommand = new AsyncRelayCommand(
             _ => ToggleAutostartAsync(),
             _logService,
-            "无法切换管理员自启。");
+            "无法切换管理员自启。",
+            errorSink: ReportError);
     }
 
     public ObservableCollection<ManagedTask> Tasks { get; } = [];
@@ -71,6 +76,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             _selectedTask = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSelectedTask));
             RaiseCommandStates();
         }
     }
@@ -84,6 +90,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(AutostartStatusText));
             OnPropertyChanged(nameof(ToggleAutostartText));
+            OnPropertyChanged(nameof(AutostartStatusForeground));
+            OnPropertyChanged(nameof(AutostartStatusBackground));
         }
     }
 
@@ -93,11 +101,31 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public string CurrentPermissionText => _isRunningAsAdministrator ? "管理员" : "普通用户";
 
+    public string CurrentPermissionForeground => _isRunningAsAdministrator ? "#16803C" : "#8A98A8";
+
+    public string CurrentPermissionBackground => _isRunningAsAdministrator ? "#EEF8F1" : "#F2F4F7";
+
+    public string AutostartStatusForeground => IsAdministratorAutostartEnabled ? "#16803C" : "#8A98A8";
+
+    public string AutostartStatusBackground => IsAdministratorAutostartEnabled ? "#F0FAF3" : "#F2F4F7";
+
     public string ToggleAutostartText => IsAdministratorAutostartEnabled
         ? "关闭管理员自启"
         : "开启管理员自启";
 
     public string LogFile => _logService.LogFile;
+
+    public bool HasSelectedTask => SelectedTask is not null;
+
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        private set
+        {
+            _statusMessage = value;
+            OnPropertyChanged();
+        }
+    }
 
     public ICommand SaveCommand { get; }
     public ICommand RunSelectedCommand { get; }
@@ -119,12 +147,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
 
         SelectedTask = Tasks.FirstOrDefault();
-        IsAdministratorAutostartEnabled = _startupTaskService.IsEnabled();
+        IsAdministratorAutostartEnabled = await Task.Run(_startupTaskService.IsEnabled);
     }
 
     public async Task SaveAsync()
     {
         await _configService.SaveAsync(Tasks);
+        IsAdministratorAutostartEnabled = await Task.Run(_startupTaskService.IsEnabled);
+        StatusMessage = "任务配置已保存";
     }
 
     public async Task<ManagedTask> ImportTaskAsync(ManagedTaskType type, string path)
@@ -164,6 +194,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             return;
         }
 
+        StatusMessage = $"任务“{task.Name}”已保存";
+
         var previousSelectedTask = SelectedTask;
         var previousState = existing.Clone();
 
@@ -192,6 +224,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void StopAll()
     {
         _processRunner.StopAll();
+        RaiseCommandStates();
     }
 
     private void RunSelected()
@@ -235,6 +268,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Tasks.Insert(Math.Min(index, Tasks.Count), task);
             SelectedTask = task;
             _logService.Error($"Could not delete task '{task.Name}'.", ex);
+            ReportError($"无法删除任务“{task.Name}”：{ex.Message}");
             return;
         }
 
@@ -259,6 +293,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             task.IsEnabled = previousIsEnabled;
             _logService.Error($"Could not update task '{task.Name}'.", ex);
+            ReportError($"无法更新任务“{task.Name}”：{ex.Message}");
         }
         finally
         {
@@ -281,6 +316,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         });
 
         IsAdministratorAutostartEnabled = await Task.Run(_startupTaskService.IsEnabled);
+        StatusMessage = IsAdministratorAutostartEnabled ? "管理员自启已授权" : "管理员自启已关闭";
     }
 
     private void RunTask(ManagedTask task)
@@ -288,10 +324,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             _processRunner.Start(task, _ => NotifyTasksChangedFromProcessCallback());
+            RaiseCommandStates();
         }
         catch (Exception ex)
         {
             _logService.Error($"Could not run task '{task.Name}'.", ex);
+            ReportError($"无法运行任务“{task.Name}”：{ex.Message}");
         }
     }
 
@@ -315,6 +353,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             try
             {
                 OnPropertyChanged(nameof(Tasks));
+                RaiseCommandStates();
             }
             catch (Exception ex)
             {
@@ -342,7 +381,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            await SaveAsync();
+            await _configService.SaveAsync(Tasks);
         }
         catch (Exception ex)
         {
@@ -364,6 +403,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
                     break;
             }
         }
+    }
+
+    private bool CanRunSelected() => SelectedTask is not null && !_processRunner.RunningTaskIds.Contains(SelectedTask.Id);
+
+    private bool CanStopSelected() => SelectedTask is not null && _processRunner.RunningTaskIds.Contains(SelectedTask.Id);
+
+    private void ReportError(string message)
+    {
+        StatusMessage = message;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -9,7 +9,7 @@ public sealed class ChineseDisplayConverterTests
     [InlineData(ManagedTaskType.PowerShellScript, "PowerShell 脚本")]
     [InlineData(ManagedTaskType.Executable, "EXE 程序")]
     [InlineData(ManagedTaskRunMode.RunOnce, "运行一次")]
-    [InlineData(ManagedTaskRunMode.LongRunning, "长期运行")]
+    [InlineData(ManagedTaskRunMode.LongRunning, "长期运行（失败自动重启）")]
     [InlineData(TaskRuntimeStatus.NotRunning, "未运行")]
     [InlineData(TaskRuntimeStatus.Running, "运行中")]
     [InlineData(TaskRuntimeStatus.Exited, "已退出")]

@@ -240,29 +240,29 @@
                             MinWidth="72"
                             Height="38"
                             Padding="12,0"
-                            Background="#EEF8F1"
+                            Background="{Binding CurrentPermissionBackground}"
                             CornerRadius="5">
                         <TextBlock Text="{Binding CurrentPermissionText}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource Green}" />
+                                   Foreground="{Binding CurrentPermissionForeground}" />
                     </Border>
                     <Border Margin="0,0,22,0"
                             Padding="12,7"
-                            Background="#F0FAF3"
-                            BorderBrush="#BDE4C7"
+                            Background="{Binding AutostartStatusBackground}"
+                            BorderBrush="{Binding AutostartStatusForeground}"
                             BorderThickness="1"
                             CornerRadius="6">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource ButtonIcon}"
                                        Text="&#xE73E;"
-                                       Foreground="{StaticResource Green}"
+                                       Foreground="{Binding AutostartStatusForeground}"
                                        VerticalAlignment="Center" />
                             <TextBlock Margin="8,0,0,0"
                                        Text="{Binding AutostartStatusText}"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource Green}"
+                                       Foreground="{Binding AutostartStatusForeground}"
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Border>
@@ -310,6 +310,18 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE710;" Foreground="{StaticResource Blue}" />
                                 <TextBlock Margin="8,0,0,0" Text="新增程序" />
+                            </StackPanel>
+                        </Button>
+                        <Button MinWidth="108" Click="AddTask_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE710;" Foreground="{StaticResource Blue}" />
+                                <TextBlock Margin="8,0,0,0" Text="高级新增" />
+                            </StackPanel>
+                        </Button>
+                        <Button MinWidth="96" Click="EditTask_Click" IsEnabled="{Binding HasSelectedTask}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE70F;" />
+                                <TextBlock Margin="8,0,0,0" Text="编辑" />
                             </StackPanel>
                         </Button>
                         <Button MinWidth="96" Command="{Binding DeleteSelectedCommand}">
@@ -375,7 +387,9 @@
                                     <DataTemplate>
                                         <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                             <CheckBox Style="{StaticResource GridCheckBox}"
-                                                      IsChecked="{Binding IsEnabled}" />
+                                                      IsChecked="{Binding IsEnabled}"
+                                                      IsHitTestVisible="False"
+                                                      Focusable="False" />
                                         </Grid>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -384,15 +398,27 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
-                                            <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="{StaticResource Green}" />
+                                            <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="#8A98A8" />
                                             <TextBlock Margin="9,0,0,0"
                                                        VerticalAlignment="Center"
                                                        Text="{Binding LastResult, Converter={StaticResource ChineseDisplay}}"
-                                                       Foreground="{StaticResource Green}" />
+                                                       Foreground="{StaticResource TextMain}" />
                                         </StackPanel>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding LastResult.Status}" Value="FailedToStart">
                                                 <Setter TargetName="StatusDot" Property="Fill" Value="#D92D20" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="Failed">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="#D92D20" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="Running">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="#0D73E8" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="Restarting">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="#F79009" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="Succeeded">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="{StaticResource Green}" />
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding LastResult.Status}" Value="NotRunning">
                                                 <Setter TargetName="StatusDot" Property="Fill" Value="#8A98A8" />
@@ -419,7 +445,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextMain}" />
 
-                        <Grid Grid.Row="1" Margin="0,18,0,0">
+                        <Grid Grid.Row="1" Margin="0,18,0,0" IsEnabled="{Binding HasSelectedTask}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="116" />
                                 <ColumnDefinition Width="*" />
@@ -440,7 +466,7 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelText}" Text="名称" />
-                            <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ReadOnlyFieldBox}" Text="{Binding SelectedTask.Name}" />
 
                             <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelText}" Text="类型" />
                             <TextBox Grid.Row="1"
@@ -450,21 +476,16 @@
                                      Text="{Binding SelectedTask.Type, Converter={StaticResource ChineseDisplay}}" />
 
                             <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelText}" Text="路径" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Row="2" Grid.Column="2" MinWidth="42" Margin="8,0,0,12" Padding="0" Click="BrowseTarget_Click">
-                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8B7;" />
-                            </Button>
+                            <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ReadOnlyFieldBox}" Text="{Binding SelectedTask.Path}" />
 
                             <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelText}" Text="参数" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ReadOnlyFieldBox}" Text="{Binding SelectedTask.Arguments}" />
 
                             <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource LabelText}" Text="工作目录" />
-                            <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Row="4" Grid.Column="2" MinWidth="42" Margin="8,0,0,12" Padding="0" Click="BrowseWorkingDirectory_Click">
-                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8B7;" />
-                            </Button>
+                            <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ReadOnlyFieldBox}" Text="{Binding SelectedTask.WorkingDirectory}" />
 
-                            <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,14" Content="启用此项目" IsChecked="{Binding SelectedTask.IsEnabled, Mode=TwoWay}" />
+                            <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource LabelText}" Text="运行模式" />
+                            <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ReadOnlyFieldBox}" Text="{Binding SelectedTask.RunMode, Converter={StaticResource ChineseDisplay}}" />
 
                             <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource LabelText}" Text="最后启动" />
                             <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource LabelText}" Text="{Binding SelectedTask.LastResult.StartedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}, TargetNullValue=--}" />
@@ -477,10 +498,23 @@
 
                             <TextBlock Grid.Row="9" Grid.Column="0" Style="{StaticResource LabelText}" Text="状态" />
                             <StackPanel Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,12" Orientation="Horizontal">
-                                <Ellipse Width="10" Height="10" Fill="{StaticResource Green}" VerticalAlignment="Center" />
+                                <Ellipse x:Name="DetailStatusDot" Width="10" Height="10" VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="#8A98A8" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedTask.LastResult.Status}" Value="Running"><Setter Property="Fill" Value="#0D73E8" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding SelectedTask.LastResult.Status}" Value="Restarting"><Setter Property="Fill" Value="#F79009" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding SelectedTask.LastResult.Status}" Value="Succeeded"><Setter Property="Fill" Value="{StaticResource Green}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding SelectedTask.LastResult.Status}" Value="Failed"><Setter Property="Fill" Value="#D92D20" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding SelectedTask.LastResult.Status}" Value="FailedToStart"><Setter Property="Fill" Value="#D92D20" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
                                 <TextBlock Margin="9,0,0,0"
                                            VerticalAlignment="Center"
-                                           Foreground="{StaticResource Green}"
+                                           Foreground="{StaticResource TextMain}"
                                            Text="{Binding SelectedTask.LastResult, Converter={StaticResource ChineseDisplay}}" />
                             </StackPanel>
 
@@ -501,6 +535,7 @@
                 BorderBrush="#D8E3EF"
                 BorderThickness="0,1,0,0">
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <TextBlock MaxWidth="420" Margin="0,0,18,0" VerticalAlignment="Center" Foreground="{StaticResource TextSubtle}" Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" />
                 <Button MinWidth="128" Click="OpenLog_Click">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE7C3;" />
@@ -519,10 +554,10 @@
                         <TextBlock Margin="9,0,0,0" Text="立即运行" />
                     </StackPanel>
                 </Button>
-                <Button MinWidth="122" Margin="0" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}">
+                <Button MinWidth="122" Margin="0" Style="{StaticResource PrimaryButton}" Click="EditTask_Click" IsEnabled="{Binding HasSelectedTask}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE105;" />
-                        <TextBlock Margin="9,0,0,0" Text="保存" />
+                        <TextBlock Margin="9,0,0,0" Text="编辑任务" />
                     </StackPanel>
                 </Button>
             </StackPanel>

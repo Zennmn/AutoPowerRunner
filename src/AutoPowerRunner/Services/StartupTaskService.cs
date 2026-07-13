@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Security;
 using System.Security.Principal;
 using System.Xml.Linq;
 using System.Threading.Tasks;
@@ -11,40 +12,50 @@ public sealed class StartupTaskService : IStartupTaskService
 {
     public const string DefaultTaskName = "AutoPowerRunner";
     public const string SilentStartupArgument = "--silent-startup";
+    public const string AuthorizedConfigHashArgument = "--authorized-config-hash";
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
 
     private readonly string _taskName;
     private readonly string _executablePath;
-    private readonly LogService? _log;
+    private readonly ILogService? _log;
     private readonly Func<string, bool, CommandResult>? _commandRunner;
+    private readonly string? _configFile;
 
-    public StartupTaskService(string executablePath, LogService? log = null, string taskName = DefaultTaskName)
+    public StartupTaskService(string executablePath, ILogService? log = null, string taskName = DefaultTaskName, string? configFile = null)
     {
         _executablePath = executablePath;
         _log = log;
         _taskName = taskName;
+        _configFile = configFile;
     }
 
     public StartupTaskService(
         string executablePath,
         Func<string, bool, CommandResult> commandRunner,
-        LogService? log = null,
-        string taskName = DefaultTaskName)
+        ILogService? log = null,
+        string taskName = DefaultTaskName,
+        string? configFile = null)
     {
         _executablePath = executablePath;
         _commandRunner = commandRunner;
         _log = log;
         _taskName = taskName;
+        _configFile = configFile;
     }
 
     public readonly record struct CommandResult(int ExitCode, string Output, string Error);
 
-    public static string BuildCreateArguments(string taskName, string executablePath, string userName)
+    public static string BuildCreateArguments(string taskName, string executablePath, string userName, string? configHash = null)
     {
         EnsureNoDoubleQuote(taskName, nameof(taskName));
         EnsureNoDoubleQuote(executablePath, nameof(executablePath));
         EnsureNoDoubleQuote(userName, nameof(userName));
+        if (configHash is not null) EnsureNoDoubleQuote(configHash, nameof(configHash));
 
-        var quotedTarget = $"\\\"{executablePath}\\\" {SilentStartupArgument}";
+        var authorization = string.IsNullOrWhiteSpace(configHash)
+            ? ""
+            : $" {AuthorizedConfigHashArgument} {configHash}";
+        var quotedTarget = $"\\\"{executablePath}\\\" {SilentStartupArgument}{authorization}";
         return $"/Create /TN \"{taskName}\" /SC ONLOGON /RL HIGHEST /RU \"{userName}\" /TR \"{quotedTarget}\" /F";
     }
 
@@ -87,13 +98,20 @@ public sealed class StartupTaskService : IStartupTaskService
     public bool IsEnabled()
     {
         var result = RunCommand(BuildQueryXmlArguments(_taskName), runAsAdmin: false, operation: "query");
-        return result.ExitCode == 0 && QueryOutputMatchesCurrentEnabledTask(result.Output, _executablePath);
+        var hash = _configFile is null ? null : TaskConfigService.ComputeConfigHash(_configFile);
+        return result.ExitCode == 0 && QueryOutputMatchesCurrentEnabledTask(result.Output, _executablePath, hash);
     }
 
     public void Enable()
     {
+        if (_configFile is not null && !IsProtectedInstallPath(_executablePath))
+        {
+            throw new SecurityException("管理员自启只能从 Program Files 或 Windows 等受保护目录启用。请先安装正式版本，不能直接授权便携目录中的可执行文件。");
+        }
+
         var userName = WindowsIdentity.GetCurrent().Name;
-        var args = BuildCreateArguments(_taskName, _executablePath, userName);
+        var hash = _configFile is null ? null : TaskConfigService.ComputeConfigHash(_configFile);
+        var args = BuildCreateArguments(_taskName, _executablePath, userName, hash);
         var result = RunCommand(args, runAsAdmin: true, operation: "create");
         if (result.ExitCode != 0)
         {
@@ -147,7 +165,15 @@ public sealed class StartupTaskService : IStartupTaskService
         var outputTask = startInfo.RedirectStandardOutput ? process.StandardOutput.ReadToEndAsync() : Task.FromResult("");
         var errorTask = startInfo.RedirectStandardError ? process.StandardError.ReadToEndAsync() : Task.FromResult("");
 
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(CommandTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"Timed out while attempting to {operation} startup task '{taskName}'.");
+        }
 
         var output = await outputTask.ConfigureAwait(false);
         var error = await errorTask.ConfigureAwait(false);
@@ -185,14 +211,14 @@ public sealed class StartupTaskService : IStartupTaskService
         return $"Failed to {operation} startup task '{taskName}'. Exit code: {result.ExitCode}. Output: {result.Output} Error: {result.Error}";
     }
 
-    private static bool QueryOutputMatchesCurrentEnabledTask(string output, string executablePath)
+    private static bool QueryOutputMatchesCurrentEnabledTask(string output, string executablePath, string? configHash)
     {
         if (string.IsNullOrWhiteSpace(output))
         {
             return false;
         }
 
-        if (XmlOutputMatchesCurrentEnabledTask(output, executablePath))
+        if (XmlOutputMatchesCurrentEnabledTask(output, executablePath, configHash))
         {
             return true;
         }
@@ -214,11 +240,13 @@ public sealed class StartupTaskService : IStartupTaskService
             return false;
         }
 
+        if (configHash is not null && !TaskArgumentsContainHash(taskToRun, configHash)) return false;
+
         var status = GetListField(output, "Status");
         return status is null || !status.Contains("Disabled", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool XmlOutputMatchesCurrentEnabledTask(string output, string executablePath)
+    private static bool XmlOutputMatchesCurrentEnabledTask(string output, string executablePath, string? configHash)
     {
         XDocument document;
         try
@@ -255,6 +283,9 @@ public sealed class StartupTaskService : IStartupTaskService
         {
             return false;
         }
+
+        var combinedArguments = $"{command} {arguments}";
+        if (configHash is not null && !TaskArgumentsContainHash(combinedArguments, configHash)) return false;
 
         var enabled = document.Descendants(ns + "Settings")
             .Elements(ns + "Enabled")
@@ -333,4 +364,22 @@ public sealed class StartupTaskService : IStartupTaskService
 
         return null;
     }
+
+    public static bool IsProtectedInstallPath(string executablePath)
+    {
+        var fullPath = Path.GetFullPath(executablePath);
+        var protectedRoots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows)
+        }.Where(root => !string.IsNullOrWhiteSpace(root));
+
+        return protectedRoots.Any(root => fullPath.StartsWith(
+            Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TaskArgumentsContainHash(string arguments, string configHash) =>
+        arguments.Contains($"{AuthorizedConfigHashArgument} {configHash}", StringComparison.OrdinalIgnoreCase);
 }

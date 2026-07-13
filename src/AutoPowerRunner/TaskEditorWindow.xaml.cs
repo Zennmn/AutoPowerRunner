@@ -69,14 +69,38 @@ public partial class TaskEditorWindow : Window
             return;
         }
 
+        var selectedType = TypeBox.SelectedItem is ManagedTaskType taskType ? taskType : ManagedTaskType.PowerShellScript;
+        var path = PathBox.Text.Trim();
+        if (!File.Exists(path))
+        {
+            MessageBox.Show(this, "所选文件不存在。", "任务", MessageBoxButton.OK, MessageBoxImage.Warning);
+            PathBox.Focus();
+            return;
+        }
+
+        var expectedExtension = selectedType == ManagedTaskType.Executable ? ".exe" : ".ps1";
+        if (!string.Equals(Path.GetExtension(path), expectedExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, $"任务类型与文件不匹配，请选择 {expectedExtension} 文件。", "任务", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var workingDirectory = WorkingDirectoryBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(workingDirectory) && !Directory.Exists(workingDirectory))
+        {
+            MessageBox.Show(this, "工作目录不存在。", "任务", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WorkingDirectoryBox.Focus();
+            return;
+        }
+
         Result = new ManagedTask
         {
             Id = _task.Id,
             Name = NameBox.Text.Trim(),
-            Type = TypeBox.SelectedItem is ManagedTaskType type ? type : ManagedTaskType.PowerShellScript,
-            Path = PathBox.Text.Trim(),
+            Type = selectedType,
+            Path = path,
             Arguments = ArgumentsBox.Text.Trim(),
-            WorkingDirectory = WorkingDirectoryBox.Text.Trim(),
+            WorkingDirectory = workingDirectory,
             RunMode = RunModeBox.SelectedItem is ManagedTaskRunMode runMode ? runMode : ManagedTaskRunMode.RunOnce,
             IsEnabled = EnabledBox.IsChecked == true,
             LastResult = _task.LastResult

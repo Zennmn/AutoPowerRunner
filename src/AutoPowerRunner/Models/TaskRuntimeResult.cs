@@ -11,6 +11,7 @@ public sealed class TaskRuntimeResult : INotifyPropertyChanged
     private DateTimeOffset? _startedAt;
     private DateTimeOffset? _exitedAt;
     private string? _error;
+    private int _restartCount;
 
     public TaskRuntimeStatus Status
     {
@@ -66,6 +67,18 @@ public sealed class TaskRuntimeResult : INotifyPropertyChanged
         }
     }
 
+    public int RestartCount
+    {
+        get => _restartCount;
+        set
+        {
+            if (SetProperty(ref _restartCount, value))
+            {
+                OnPropertyChanged(nameof(Summary));
+            }
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     [JsonIgnore]
@@ -78,7 +91,11 @@ public sealed class TaskRuntimeResult : INotifyPropertyChanged
                 TaskRuntimeStatus.NotRunning => "未运行",
                 TaskRuntimeStatus.Running => StartedAt is null ? "运行中" : $"运行中，自 {StartedAt:yyyy-MM-dd HH:mm:ss} 起",
                 TaskRuntimeStatus.Exited => ExitCode is null ? "已退出" : $"已退出，退出码 {ExitCode}",
+                TaskRuntimeStatus.Succeeded => "已成功",
+                TaskRuntimeStatus.Failed => ExitCode is null ? "运行失败" : $"运行失败，退出码 {ExitCode}",
+                TaskRuntimeStatus.Stopped => "已停止",
                 TaskRuntimeStatus.FailedToStart => string.IsNullOrWhiteSpace(Error) ? "启动失败" : $"启动失败：{Error}",
+                TaskRuntimeStatus.Restarting => $"正在重启（第 {RestartCount} 次）",
                 _ => Status.ToString()
             };
         }
