@@ -84,7 +84,8 @@ public sealed class ManagedTask : INotifyPropertyChanged
                 ExitCode = LastResult.ExitCode,
                 StartedAt = LastResult.StartedAt,
                 ExitedAt = LastResult.ExitedAt,
-                Error = LastResult.Error
+                Error = LastResult.Error,
+                RestartCount = LastResult.RestartCount
             }
         };
     }

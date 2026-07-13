@@ -119,7 +119,7 @@ public sealed class ProcessRunnerTests
 
         using var process = runner.Start(task);
 
-        var exited = await WaitUntilAsync(() => task.LastResult.Status == TaskRuntimeStatus.Exited);
+        var exited = await WaitUntilAsync(() => task.LastResult.Status == TaskRuntimeStatus.Failed);
 
         Assert.True(exited);
         Assert.Equal(7, task.LastResult.ExitCode);
@@ -145,7 +145,7 @@ public sealed class ProcessRunnerTests
         var exception = Record.Exception(() => runner.Start(task, _ => throw new InvalidOperationException("callback boom")));
 
         Assert.Null(exception);
-        var exited = await WaitUntilAsync(() => task.LastResult.Status == TaskRuntimeStatus.Exited);
+        var exited = await WaitUntilAsync(() => task.LastResult.Status == TaskRuntimeStatus.Succeeded);
         Assert.True(exited);
         Assert.Equal(0, task.LastResult.ExitCode);
         Assert.DoesNotContain(task.Id, runner.RunningTaskIds);
@@ -191,7 +191,7 @@ public sealed class ProcessRunnerTests
 
         updateContext.Drain();
 
-        Assert.Equal(TaskRuntimeStatus.Exited, task.LastResult.Status);
+        Assert.Equal(TaskRuntimeStatus.Failed, task.LastResult.Status);
         Assert.Equal(3, task.LastResult.ExitCode);
         Assert.Contains(nameof(TaskRuntimeResult.Status), dispatchedChanges);
         Assert.Contains(nameof(TaskRuntimeResult.ExitCode), dispatchedChanges);
@@ -252,7 +252,7 @@ public sealed class ProcessRunnerTests
         runner.Stop(task.Id);
 
         Assert.DoesNotContain(task.Id, runner.RunningTaskIds);
-        Assert.Equal(TaskRuntimeStatus.Exited, task.LastResult.Status);
+        Assert.Equal(TaskRuntimeStatus.Stopped, task.LastResult.Status);
         Assert.NotNull(task.LastResult.ExitedAt);
     }
 

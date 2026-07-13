@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows;
@@ -14,7 +15,11 @@ namespace AutoPowerRunner;
 
 public partial class App : System.Windows.Application
 {
+    private const string SingleInstanceMutexName = "AutoPowerRunner.SingleInstance";
+    private const string ActivationEventName = "AutoPowerRunner.ActivateExisting";
     private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activationEvent;
+    private RegisteredWaitHandle? _activationRegistration;
     private Forms.NotifyIcon? _trayIcon;
     private Forms.ToolStripMenuItem? _autostartMenuItem;
     private MainViewModel? _viewModel;
@@ -32,18 +37,22 @@ public partial class App : System.Windows.Application
 
         try
         {
-            _singleInstanceMutex = new Mutex(initiallyOwned: true, "AutoPowerRunner.SingleInstance", out var createdNew);
+            DispatcherUnhandledException += App_DispatcherUnhandledException;
+            _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var createdNew);
             if (!createdNew)
             {
+                SignalExistingInstance();
                 Shutdown();
                 return;
             }
 
             _ownsMutex = true;
+            RegisterActivationEvent();
 
             var uiContext = GetOrCreateUiContext();
             var paths = AppPaths.ForCurrentUser();
             _logService = new LogService(paths);
+            var silentStartup = !ShouldShowMainWindow(e.Args);
             var configService = new TaskConfigService(paths);
             _processRunner = new ProcessRunner(_logService, uiContext);
             var executablePath = GetExecutablePath();
@@ -58,11 +67,14 @@ public partial class App : System.Windows.Application
                 IsRunningAsAdministrator());
             _mainWindow = new MainWindow(_viewModel);
 
-            var showMainWindow = ShouldShowMainWindow(e.Args);
+            var showMainWindow = !silentStartup;
 
             await _mainWindow.InitializeAsync();
             CreateTrayIcon();
-            _viewModel.RunAllEnabled();
+            if (ShouldRunEnabledTasks(e.Args))
+            {
+                _viewModel.RunAllEnabled();
+            }
             if (showMainWindow)
             {
                 _mainWindow.Show();
@@ -86,6 +98,7 @@ public partial class App : System.Windows.Application
         {
             DisposeTrayIcon();
             StopRunningProcesses();
+            DisposeActivationEvent();
             ReleaseMutex();
             DisposeMutex();
         }
@@ -104,8 +117,8 @@ public partial class App : System.Windows.Application
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开窗口", null, (_, _) => OpenMainWindow());
-        menu.Items.Add("运行所有启用任务", null, (_, _) => _viewModel.RunAllEnabled());
-        menu.Items.Add("停止所有运行任务", null, (_, _) => _viewModel.StopAll());
+        menu.Items.Add("运行所有启用任务", null, (_, _) => _viewModel.RunAllEnabledCommand.Execute(null));
+        menu.Items.Add("停止所有运行任务", null, (_, _) => _viewModel.StopAllCommand.Execute(null));
         _autostartMenuItem = new Forms.ToolStripMenuItem(
             BuildTrayAutostartMenuText(_viewModel.IsAdministratorAutostartEnabled),
             image: null,
@@ -276,6 +289,9 @@ public partial class App : System.Windows.Application
         return isAdministratorAutostartEnabled ? "关闭管理员自启" : "开启管理员自启";
     }
 
+    public static bool ShouldRunEnabledTasks(IReadOnlyList<string> startupArguments) =>
+        !ShouldShowMainWindow(startupArguments);
+
     private static bool IsRunningAsAdministrator()
     {
         using var identity = WindowsIdentity.GetCurrent();
@@ -350,6 +366,44 @@ public partial class App : System.Windows.Application
         {
             _singleInstanceMutex = null;
         }
+    }
+
+    private void RegisterActivationEvent()
+    {
+        _activationEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivationEventName);
+        _activationRegistration = ThreadPool.RegisterWaitForSingleObject(
+            _activationEvent,
+            (_, _) => Dispatcher.BeginInvoke(OpenMainWindow),
+            null,
+            Timeout.Infinite,
+            executeOnlyOnce: false);
+    }
+
+    private static void SignalExistingInstance()
+    {
+        try
+        {
+            using var activationEvent = EventWaitHandle.OpenExisting(ActivationEventName);
+            activationEvent.Set();
+        }
+        catch (WaitHandleCannotBeOpenedException)
+        {
+        }
+    }
+
+    private void DisposeActivationEvent()
+    {
+        _activationRegistration?.Unregister(null);
+        _activationRegistration = null;
+        _activationEvent?.Dispose();
+        _activationEvent = null;
+    }
+
+    private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        LogCleanupFailure("Unhandled UI exception.", e.Exception);
+        System.Windows.MessageBox.Show($"发生未处理错误。{Environment.NewLine}{e.Exception.Message}", "自启管家", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
     }
 
     private void LogStartupFailure(Exception exception)

@@ -309,6 +309,54 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task MainViewModel_ToggleTaskEnabled_TogglesCommandParameterAndSaves()
+    {
+        var config = new FakeTaskConfigService();
+        var selected = new ManagedTask { Name = "Selected", IsEnabled = true };
+        var toggled = new ManagedTask { Name = "Toggled", IsEnabled = true };
+        var viewModel = CreateViewModel(config);
+        viewModel.Tasks.Add(selected);
+        viewModel.Tasks.Add(toggled);
+        viewModel.SelectedTask = selected;
+
+        viewModel.ToggleTaskEnabledCommand.Execute(toggled);
+        await AwaitCommandAsync(viewModel.ToggleTaskEnabledCommand);
+
+        Assert.True(selected.IsEnabled);
+        Assert.False(toggled.IsEnabled);
+        Assert.Equal(1, config.SaveCount);
+        Assert.Equal([selected, toggled], config.LastSavedTasks);
+    }
+
+    [Fact]
+    public void MainViewModel_TaskSummary_TracksCollectionAndRuntimeStatus()
+    {
+        var processRunner = new FakeProcessRunner();
+        var viewModel = CreateViewModel(processRunner: processRunner);
+        var running = new ManagedTask { Name = "Running", IsEnabled = true };
+        running.LastResult.Status = TaskRuntimeStatus.Running;
+        var idle = new ManagedTask { Name = "Idle", IsEnabled = false };
+        var changedProperties = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+
+        viewModel.Tasks.Add(running);
+        viewModel.Tasks.Add(idle);
+
+        Assert.Equal(2, viewModel.TaskCount);
+        Assert.Equal(1, viewModel.RunningTaskCount);
+        Assert.Equal("2 个任务，1 个正在运行", viewModel.TaskSummary);
+        Assert.Contains(nameof(MainViewModel.TaskCount), changedProperties);
+        Assert.Contains(nameof(MainViewModel.TaskSummary), changedProperties);
+
+        viewModel.RunAllEnabled();
+        running.LastResult.Status = TaskRuntimeStatus.Stopped;
+        processRunner.LastUpdateCallback?.Invoke(running);
+
+        Assert.Equal(0, viewModel.RunningTaskCount);
+        Assert.Contains(nameof(MainViewModel.RunningTaskCount), changedProperties);
+    }
+
+    [Fact]
     public void MainViewModel_SelectedTask_RaisesCanExecuteChanged()
     {
         var viewModel = CreateViewModel();
@@ -319,6 +367,22 @@ public sealed class MainViewModelTests
 
         Assert.True(raisedCount > 0);
         Assert.True(viewModel.RunSelectedCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void MainViewModel_SelectedActionVisibility_FollowsRuntimeStatus()
+    {
+        var task = new ManagedTask();
+        var viewModel = CreateViewModel();
+        viewModel.SelectedTask = task;
+
+        Assert.True(viewModel.ShowRunSelectedAction);
+        Assert.False(viewModel.ShowStopSelectedAction);
+
+        task.LastResult.Status = TaskRuntimeStatus.Running;
+
+        Assert.False(viewModel.ShowRunSelectedAction);
+        Assert.True(viewModel.ShowStopSelectedAction);
     }
 
     [Fact]
@@ -333,6 +397,7 @@ public sealed class MainViewModelTests
         viewModel.Tasks.Add(task);
 
         viewModel.RunAllEnabled();
+        changedProperties.Clear();
         processRunner.LastUpdateCallback?.Invoke(task);
 
         Assert.Empty(changedProperties);

@@ -2,9 +2,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using AutoPowerRunner.Models;
 using AutoPowerRunner.ViewModels;
-using Forms = System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
@@ -20,6 +20,44 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = _viewModel;
+        ApplyResponsiveLayout(Width);
+    }
+
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        ApplyResponsiveLayout(e.NewSize.Width);
+    }
+
+    private void ApplyResponsiveLayout(double windowWidth)
+    {
+        var compactHeader = windowWidth < 1120;
+        HeaderRow.Height = new GridLength(compactHeader ? 108 : 68);
+        System.Windows.Controls.Grid.SetRow(HeaderStatusPanel, compactHeader ? 1 : 0);
+        System.Windows.Controls.Grid.SetColumn(HeaderStatusPanel, compactHeader ? 0 : 1);
+        System.Windows.Controls.Grid.SetColumnSpan(HeaderStatusPanel, compactHeader ? 2 : 1);
+        HeaderStatusPanel.Margin = compactHeader ? new Thickness(0, 0, 0, 8) : new Thickness(0);
+
+        TaskListColumn.Width = new GridLength(windowWidth switch
+        {
+            < 1020 => 320,
+            < 1200 => 360,
+            < 1360 => 400,
+            _ => 430
+        });
+        WorkspaceGapColumn.Width = new GridLength(windowWidth < 1020 ? 12 : 18);
+
+        var stackDetails = windowWidth < 1180;
+        DetailPrimaryColumn.Width = new GridLength(1, GridUnitType.Star);
+        DetailGapColumn.Width = new GridLength(stackDetails ? 0 : 16);
+        DetailSecondaryColumn.Width = stackDetails
+            ? new GridLength(0)
+            : new GridLength(1, GridUnitType.Star);
+
+        System.Windows.Controls.Grid.SetRow(DetailPrimaryPanel, 0);
+        System.Windows.Controls.Grid.SetColumn(DetailPrimaryPanel, 0);
+        System.Windows.Controls.Grid.SetRow(DetailSecondaryPanel, stackDetails ? 1 : 0);
+        System.Windows.Controls.Grid.SetColumn(DetailSecondaryPanel, stackDetails ? 0 : 2);
+        DetailSecondaryPanel.Margin = stackDetails ? new Thickness(0, 16, 0, 0) : new Thickness(0);
     }
 
     public async Task InitializeAsync()
@@ -40,6 +78,25 @@ public partial class MainWindow : Window
     private async void ImportExecutable_Click(object sender, RoutedEventArgs e)
     {
         await ImportTaskFromFileAsync(ManagedTaskType.Executable);
+    }
+
+    private void AddTask_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button)
+        {
+            return;
+        }
+
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+
+    private void TaskItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListBoxItem item)
+        {
+            item.IsSelected = true;
+        }
     }
 
     private async Task ImportTaskFromFileAsync(ManagedTaskType type)
@@ -63,22 +120,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowError("无法导入任务。", ex);
-        }
-    }
-
-    private async void AddTask_Click(object sender, RoutedEventArgs e)
-    {
-        var editor = new TaskEditorWindow { Owner = this };
-        if (editor.ShowDialog() == true)
-        {
-            try
-            {
-                await _viewModel.AddOrUpdateTaskAsync(editor.Result);
-            }
-            catch (Exception ex)
-            {
-                ShowError("无法保存任务。", ex);
-            }
         }
     }
 
@@ -122,52 +163,6 @@ public partial class MainWindow : Window
         {
             ShowError("无法打开日志文件。", ex);
         }
-    }
-
-    private void BrowseTarget_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel.SelectedTask is null)
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            FileName = _viewModel.SelectedTask.Path,
-            Filter = GetFileFilter(_viewModel.SelectedTask.Type)
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        _viewModel.SelectedTask.Path = dialog.FileName;
-        _viewModel.SelectedTask.WorkingDirectory = Path.GetDirectoryName(dialog.FileName) ?? "";
-    }
-
-    private void BrowseWorkingDirectory_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel.SelectedTask is null)
-        {
-            return;
-        }
-
-        using var dialog = new Forms.FolderBrowserDialog
-        {
-            Description = "选择工作目录",
-            SelectedPath = Directory.Exists(_viewModel.SelectedTask.WorkingDirectory)
-                ? _viewModel.SelectedTask.WorkingDirectory
-                : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            UseDescriptionForTitle = true
-        };
-
-        if (dialog.ShowDialog() != Forms.DialogResult.OK)
-        {
-            return;
-        }
-
-        _viewModel.SelectedTask.WorkingDirectory = dialog.SelectedPath;
     }
 
     protected override void OnClosing(CancelEventArgs e)

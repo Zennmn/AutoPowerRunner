@@ -29,4 +29,11 @@ public sealed class AppStartupOptionsTests
     {
         Assert.Equal(expected, App.BuildTrayAutostartMenuText(isEnabled));
     }
+
+    [Fact]
+    public void ShouldRunEnabledTasks_RequiresSilentStartup()
+    {
+        Assert.False(App.ShouldRunEnabledTasks([]));
+        Assert.True(App.ShouldRunEnabledTasks(["--silent-startup"]));
+    }
 }

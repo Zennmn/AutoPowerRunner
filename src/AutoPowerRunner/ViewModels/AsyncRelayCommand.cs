@@ -9,18 +9,21 @@ public sealed class AsyncRelayCommand : ICommand
     private readonly Predicate<object?>? _canExecute;
     private readonly ILogService? _logService;
     private readonly string _errorMessage;
+    private readonly Action<string>? _errorSink;
     private bool _isExecuting;
 
     public AsyncRelayCommand(
         Func<object?, Task> execute,
         ILogService? logService = null,
         string errorMessage = "Command failed.",
-        Predicate<object?>? canExecute = null)
+        Predicate<object?>? canExecute = null,
+        Action<string>? errorSink = null)
     {
         _execute = execute;
         _logService = logService;
         _errorMessage = errorMessage;
         _canExecute = canExecute;
+        _errorSink = errorSink;
     }
 
     public event EventHandler? CanExecuteChanged;
@@ -59,6 +62,7 @@ public sealed class AsyncRelayCommand : ICommand
         catch (Exception ex)
         {
             _logService?.Error(_errorMessage, ex);
+            _errorSink?.Invoke($"{_errorMessage} {ex.Message}");
         }
         finally
         {

@@ -11,13 +11,14 @@ public sealed class StartupTaskService : IStartupTaskService
 {
     public const string DefaultTaskName = "AutoPowerRunner";
     public const string SilentStartupArgument = "--silent-startup";
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
 
     private readonly string _taskName;
     private readonly string _executablePath;
-    private readonly LogService? _log;
+    private readonly ILogService? _log;
     private readonly Func<string, bool, CommandResult>? _commandRunner;
 
-    public StartupTaskService(string executablePath, LogService? log = null, string taskName = DefaultTaskName)
+    public StartupTaskService(string executablePath, ILogService? log = null, string taskName = DefaultTaskName)
     {
         _executablePath = executablePath;
         _log = log;
@@ -27,7 +28,7 @@ public sealed class StartupTaskService : IStartupTaskService
     public StartupTaskService(
         string executablePath,
         Func<string, bool, CommandResult> commandRunner,
-        LogService? log = null,
+        ILogService? log = null,
         string taskName = DefaultTaskName)
     {
         _executablePath = executablePath;
@@ -43,7 +44,6 @@ public sealed class StartupTaskService : IStartupTaskService
         EnsureNoDoubleQuote(taskName, nameof(taskName));
         EnsureNoDoubleQuote(executablePath, nameof(executablePath));
         EnsureNoDoubleQuote(userName, nameof(userName));
-
         var quotedTarget = $"\\\"{executablePath}\\\" {SilentStartupArgument}";
         return $"/Create /TN \"{taskName}\" /SC ONLOGON /RL HIGHEST /RU \"{userName}\" /TR \"{quotedTarget}\" /F";
     }
@@ -147,7 +147,15 @@ public sealed class StartupTaskService : IStartupTaskService
         var outputTask = startInfo.RedirectStandardOutput ? process.StandardOutput.ReadToEndAsync() : Task.FromResult("");
         var errorTask = startInfo.RedirectStandardError ? process.StandardError.ReadToEndAsync() : Task.FromResult("");
 
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(CommandTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"Timed out while attempting to {operation} startup task '{taskName}'.");
+        }
 
         var output = await outputTask.ConfigureAwait(false);
         var error = await errorTask.ConfigureAwait(false);
@@ -333,4 +341,5 @@ public sealed class StartupTaskService : IStartupTaskService
 
         return null;
     }
+
 }

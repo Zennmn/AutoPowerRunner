@@ -17,5 +17,9 @@ public enum TaskRuntimeStatus
     NotRunning = 0,
     Running = 1,
     Exited = 2,
-    FailedToStart = 3
+    FailedToStart = 3,
+    Succeeded = 4,
+    Failed = 5,
+    Stopped = 6,
+    Restarting = 7
 }
