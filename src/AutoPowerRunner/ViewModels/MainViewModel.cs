@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -35,6 +36,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _updateContext = updateContext;
         _isRunningAsAdministrator = isRunningAsAdministrator;
 
+        Tasks.CollectionChanged += Tasks_CollectionChanged;
+
         SaveCommand = new AsyncRelayCommand(
             _ => SaveAsync(),
             _logService,
@@ -53,6 +56,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _logService,
             "无法更新选中的任务。",
             _ => SelectedTask is not null,
+            ReportError);
+        ToggleTaskEnabledCommand = new AsyncRelayCommand(
+            task => ToggleTaskEnabledAsync(task as ManagedTask),
+            _logService,
+            "无法更新任务。",
+            task => task is ManagedTask,
             ReportError);
         RunAllEnabledCommand = new RelayCommand(_ => RunAllEnabled());
         StopAllCommand = new RelayCommand(_ => StopAll());
@@ -90,6 +99,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(AutostartStatusText));
             OnPropertyChanged(nameof(ToggleAutostartText));
+            OnPropertyChanged(nameof(CompactToggleAutostartText));
             OnPropertyChanged(nameof(AutostartStatusForeground));
             OnPropertyChanged(nameof(AutostartStatusBackground));
         }
@@ -113,9 +123,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ? "关闭管理员自启"
         : "开启管理员自启";
 
+    public string CompactToggleAutostartText => IsAdministratorAutostartEnabled ? "关闭自启" : "开启自启";
+
     public string LogFile => _logService.LogFile;
 
     public bool HasSelectedTask => SelectedTask is not null;
+
+    public bool ShowStopSelectedAction => SelectedTask?.LastResult.Status is
+        TaskRuntimeStatus.Running or TaskRuntimeStatus.Restarting;
+
+    public bool ShowRunSelectedAction => HasSelectedTask && !ShowStopSelectedAction;
+
+    public int TaskCount => Tasks.Count;
+
+    public int RunningTaskCount => Tasks.Count(task =>
+        task.LastResult.Status is TaskRuntimeStatus.Running or TaskRuntimeStatus.Restarting);
+
+    public string TaskSummary => $"{TaskCount} 个任务，{RunningTaskCount} 个正在运行";
 
     public string StatusMessage
     {
@@ -132,6 +156,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ICommand StopSelectedCommand { get; }
     public ICommand DeleteSelectedCommand { get; }
     public ICommand ToggleSelectedEnabledCommand { get; }
+    public ICommand ToggleTaskEnabledCommand { get; }
     public ICommand RunAllEnabledCommand { get; }
     public ICommand StopAllCommand { get; }
     public ICommand ToggleAutostartCommand { get; }
@@ -224,6 +249,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void StopAll()
     {
         _processRunner.StopAll();
+        NotifyTaskSummaryChanged();
         RaiseCommandStates();
     }
 
@@ -240,6 +266,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (SelectedTask is not null)
         {
             _processRunner.Stop(SelectedTask.Id);
+            NotifyTaskSummaryChanged();
         }
     }
 
@@ -277,12 +304,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private async Task ToggleSelectedEnabledAsync()
     {
-        if (SelectedTask is null)
+        await ToggleTaskEnabledAsync(SelectedTask);
+    }
+
+    private async Task ToggleTaskEnabledAsync(ManagedTask? task)
+    {
+        if (task is null)
         {
             return;
         }
 
-        var task = SelectedTask;
         var previousIsEnabled = task.IsEnabled;
         task.IsEnabled = !task.IsEnabled;
         try
@@ -324,6 +355,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             _processRunner.Start(task, _ => NotifyTasksChangedFromProcessCallback());
+            NotifyTaskSummaryChanged();
             RaiseCommandStates();
         }
         catch (Exception ex)
@@ -353,6 +385,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             try
             {
                 OnPropertyChanged(nameof(Tasks));
+                NotifyTaskSummaryChanged();
                 RaiseCommandStates();
             }
             catch (Exception ex)
@@ -391,7 +424,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void RaiseCommandStates()
     {
-        foreach (var command in new[] { RunSelectedCommand, StopSelectedCommand, DeleteSelectedCommand, ToggleSelectedEnabledCommand })
+        OnPropertyChanged(nameof(ShowRunSelectedAction));
+        OnPropertyChanged(nameof(ShowStopSelectedAction));
+
+        foreach (var command in new[] { RunSelectedCommand, StopSelectedCommand, DeleteSelectedCommand, ToggleSelectedEnabledCommand, ToggleTaskEnabledCommand })
         {
             switch (command)
             {
@@ -412,6 +448,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void ReportError(string message)
     {
         StatusMessage = message;
+    }
+
+    private void Tasks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        NotifyTaskSummaryChanged();
+    }
+
+    private void NotifyTaskSummaryChanged()
+    {
+        OnPropertyChanged(nameof(TaskCount));
+        OnPropertyChanged(nameof(RunningTaskCount));
+        OnPropertyChanged(nameof(TaskSummary));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
