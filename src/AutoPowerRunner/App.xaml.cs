@@ -53,16 +53,10 @@ public partial class App : System.Windows.Application
             var paths = AppPaths.ForCurrentUser();
             _logService = new LogService(paths);
             var silentStartup = !ShouldShowMainWindow(e.Args);
-            var authorizedConfigHash = GetAuthorizedConfigHash(e.Args);
-            if (silentStartup && authorizedConfigHash is null)
-            {
-                throw new SecurityException("管理员静默启动缺少配置授权哈希。请手动打开应用并重新授权管理员自启。");
-            }
-
-            var configService = new TaskConfigService(paths, silentStartup ? authorizedConfigHash : null);
+            var configService = new TaskConfigService(paths);
             _processRunner = new ProcessRunner(_logService, uiContext);
             var executablePath = GetExecutablePath();
-            var startupTaskService = new StartupTaskService(executablePath, _logService, configFile: paths.ConfigFile);
+            var startupTaskService = new StartupTaskService(executablePath, _logService);
 
             _viewModel = new MainViewModel(
                 configService,
@@ -295,22 +289,8 @@ public partial class App : System.Windows.Application
         return isAdministratorAutostartEnabled ? "关闭管理员自启" : "开启管理员自启";
     }
 
-    public static string? GetAuthorizedConfigHash(IReadOnlyList<string> startupArguments)
-    {
-        for (var index = 0; index < startupArguments.Count - 1; index++)
-        {
-            if (string.Equals(startupArguments[index], StartupTaskService.AuthorizedConfigHashArgument, StringComparison.OrdinalIgnoreCase))
-            {
-                return startupArguments[index + 1];
-            }
-        }
-
-        return null;
-    }
-
     public static bool ShouldRunEnabledTasks(IReadOnlyList<string> startupArguments) =>
-        !ShouldShowMainWindow(startupArguments)
-        && GetAuthorizedConfigHash(startupArguments) is not null;
+        !ShouldShowMainWindow(startupArguments);
 
     private static bool IsRunningAsAdministrator()
     {

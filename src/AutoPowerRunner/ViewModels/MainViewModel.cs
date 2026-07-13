@@ -316,7 +316,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         });
 
         IsAdministratorAutostartEnabled = await Task.Run(_startupTaskService.IsEnabled);
-        StatusMessage = IsAdministratorAutostartEnabled ? "管理员自启已授权" : "管理员自启已关闭";
+        StatusMessage = IsAdministratorAutostartEnabled ? "管理员自启已开启" : "管理员自启已关闭";
     }
 
     private void RunTask(ManagedTask task)

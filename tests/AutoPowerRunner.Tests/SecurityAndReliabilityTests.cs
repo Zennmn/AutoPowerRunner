@@ -1,4 +1,3 @@
-using System.Security;
 using AutoPowerRunner.Models;
 using AutoPowerRunner.Services;
 
@@ -6,27 +5,6 @@ namespace AutoPowerRunner.Tests;
 
 public sealed class SecurityAndReliabilityTests
 {
-    [Fact]
-    public async Task AuthorizedConfigHash_IgnoresRuntimeResultButRejectsDefinitionChanges()
-    {
-        using var temp = new TempDirectory();
-        var service = new TaskConfigService(temp.Path);
-        var task = new ManagedTask { Name = "Task", Path = @"C:\Tools\task.exe", Type = ManagedTaskType.Executable };
-        await service.SaveAsync([task]);
-        var configFile = Path.Combine(temp.Path, "config.json");
-        var authorizedHash = TaskConfigService.ComputeConfigHash(configFile);
-
-        task.LastResult.Status = TaskRuntimeStatus.Failed;
-        task.LastResult.ExitCode = 7;
-        await service.SaveAsync([task]);
-        var authorizedService = new TaskConfigService(temp.Path, authorizedHash);
-        Assert.Single(await authorizedService.LoadAsync());
-
-        task.Path = @"C:\Tools\tampered.exe";
-        await service.SaveAsync([task]);
-        await Assert.ThrowsAsync<SecurityException>(() => authorizedService.LoadAsync());
-    }
-
     [Fact]
     public async Task ConcurrentSaves_PersistLatestRequestedSnapshot()
     {
@@ -78,68 +56,6 @@ public sealed class SecurityAndReliabilityTests
 
         Assert.True(File.Exists(paths.LogFile + ".1"));
         Assert.Contains("after rotation", File.ReadAllText(paths.LogFile));
-    }
-
-    [Fact]
-    public void StartupTaskArguments_IncludeAuthorizedConfigHash()
-    {
-        var arguments = StartupTaskService.BuildCreateArguments(
-            "AutoPowerRunner",
-            @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe",
-            @"DESKTOP\User",
-            "ABC123");
-
-        Assert.Contains("--authorized-config-hash ABC123", arguments);
-    }
-
-    [Fact]
-    public void ProtectedInstallPath_RejectsPortableLocation()
-    {
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        Assert.True(StartupTaskService.IsProtectedInstallPath(Path.Combine(programFiles, "AutoPowerRunner", "AutoPowerRunner.exe")));
-        Assert.False(StartupTaskService.IsProtectedInstallPath(Path.Combine(Path.GetTempPath(), "AutoPowerRunner.exe")));
-    }
-
-    [Fact]
-    public void EnableAdministratorAutostart_FromPortableLocation_IsRejectedBeforeSchtasks()
-    {
-        using var temp = new TempDirectory();
-        var commandWasRun = false;
-        var executable = Path.Combine(temp.Path, "AutoPowerRunner.exe");
-        var configFile = Path.Combine(temp.Path, "config.json");
-        var service = new StartupTaskService(
-            executable,
-            commandRunner: (_, _) =>
-            {
-                commandWasRun = true;
-                return new StartupTaskService.CommandResult(0, "", "");
-            },
-            configFile: configFile);
-
-        Assert.Throws<SecurityException>(() => service.Enable());
-        Assert.False(commandWasRun);
-    }
-
-    [Fact]
-    public async Task StartupTaskStatus_RequiresCurrentAuthorizedDefinitionHash()
-    {
-        using var temp = new TempDirectory();
-        var config = new TaskConfigService(temp.Path);
-        var task = new ManagedTask { Name = "Task", Path = @"C:\Tools\task.exe", Type = ManagedTaskType.Executable };
-        await config.SaveAsync([task]);
-        var configFile = Path.Combine(temp.Path, "config.json");
-        var executable = @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe";
-        var authorizedHash = TaskConfigService.ComputeConfigHash(configFile);
-        var startup = new StartupTaskService(
-            executable,
-            commandRunner: (_, _) => new StartupTaskService.CommandResult(0, $"Task To Run: \"{executable}\" --silent-startup --authorized-config-hash {authorizedHash}\nStatus: Ready", ""),
-            configFile: configFile);
-
-        Assert.True(startup.IsEnabled());
-
-        task.Arguments = "--tampered";
-        await config.SaveAsync([task]);
-        Assert.False(startup.IsEnabled());
     }
 
     [Fact]

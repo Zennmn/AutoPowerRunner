@@ -1,5 +1,4 @@
 using System.IO;
-using System.Security;
 using System.Security.Cryptography;
 using System.Text.Json;
 using AutoPowerRunner.Models;
@@ -10,19 +9,17 @@ public sealed class TaskConfigService : ITaskConfigService
 {
     private readonly string _configDirectory;
     private readonly string _configFile;
-    private readonly string? _expectedHash;
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
-    public TaskConfigService(string configDirectory, string? expectedHash = null)
+    public TaskConfigService(string configDirectory)
     {
         _configDirectory = configDirectory;
         _configFile = Path.Combine(configDirectory, "config.json");
-        _expectedHash = NormalizeHash(expectedHash);
     }
 
-    public TaskConfigService(AppPaths paths, string? expectedHash = null)
-        : this(paths.ConfigDirectory, expectedHash)
+    public TaskConfigService(AppPaths paths)
+        : this(paths.ConfigDirectory)
     {
     }
 
@@ -31,7 +28,6 @@ public sealed class TaskConfigService : ITaskConfigService
         Directory.CreateDirectory(_configDirectory);
         if (!File.Exists(_configFile))
         {
-            VerifyAuthorizedTasks([]);
             return [];
         }
 
@@ -40,7 +36,6 @@ public sealed class TaskConfigService : ITaskConfigService
             var bytes = await File.ReadAllBytesAsync(_configFile, cancellationToken);
             var tasks = JsonSerializer.Deserialize<List<ManagedTask>>(bytes, _jsonOptions) ?? [];
             var normalized = NormalizeTasks(tasks);
-            VerifyAuthorizedTasks(normalized);
             return normalized;
         }
         catch (JsonException)
@@ -86,39 +81,6 @@ public sealed class TaskConfigService : ITaskConfigService
         }
     }
 
-    public static string ComputeConfigHash(string configFile)
-    {
-        if (!File.Exists(configFile)) return ComputeAuthorizationHash([]);
-        var tasks = JsonSerializer.Deserialize<List<ManagedTask>>(File.ReadAllBytes(configFile)) ?? [];
-        return ComputeAuthorizationHash(NormalizeTasks(tasks));
-    }
-
-    public static string ComputeAuthorizationHash(IEnumerable<ManagedTask> tasks)
-    {
-        var definitions = tasks.Select(task => new AuthorizedTaskDefinition(
-            task.Id,
-            task.Name,
-            task.Type,
-            task.Path,
-            task.Arguments,
-            task.WorkingDirectory,
-            task.RunMode,
-            task.IsEnabled));
-        return Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(definitions)));
-    }
-
-    private void VerifyAuthorizedTasks(IEnumerable<ManagedTask> tasks)
-    {
-        if (_expectedHash is null) return;
-        var actual = ComputeAuthorizationHash(tasks);
-        if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(_expectedHash),
-                Convert.FromHexString(actual)))
-        {
-            throw new SecurityException("任务配置自管理员授权后已被修改。为安全起见，本次不会运行任何任务；请在界面中重新授权管理员自启。");
-        }
-    }
-
     private static List<ManagedTask> NormalizeTasks(IEnumerable<ManagedTask> tasks)
     {
         var normalized = new List<ManagedTask>();
@@ -154,31 +116,10 @@ public sealed class TaskConfigService : ITaskConfigService
         return new Guid(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material)).AsSpan(0, 16));
     }
 
-    private static string? NormalizeHash(string? hash)
-    {
-        if (string.IsNullOrWhiteSpace(hash)) return null;
-        var normalized = hash.Trim().ToUpperInvariant();
-        if (normalized.Length != 64 || normalized.Any(character => !Uri.IsHexDigit(character)))
-        {
-            throw new SecurityException("管理员授权配置哈希无效。");
-        }
-
-        return normalized;
-    }
-
     private void BackupCorruptConfig()
     {
         var backupPath = Path.Combine(_configDirectory, $"config.corrupt.{DateTimeOffset.Now:yyyyMMddHHmmssfff}.{Guid.NewGuid():N}.json");
         File.Move(_configFile, backupPath);
     }
 
-    private sealed record AuthorizedTaskDefinition(
-        Guid Id,
-        string Name,
-        ManagedTaskType Type,
-        string Path,
-        string Arguments,
-        string WorkingDirectory,
-        ManagedTaskRunMode RunMode,
-        bool IsEnabled);
 }
