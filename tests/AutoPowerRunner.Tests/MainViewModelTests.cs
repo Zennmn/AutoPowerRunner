@@ -23,6 +23,104 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public async Task MainViewModel_ImportTaskAsync_CreatesSelectsAndSavesScriptTaskFromPath()
+    {
+        var config = new FakeTaskConfigService();
+        var viewModel = CreateViewModel(config);
+        var path = "C:\\Scripts\\check.ps1";
+
+        var task = await viewModel.ImportTaskAsync(ManagedTaskType.PowerShellScript, path);
+
+        Assert.Same(task, Assert.Single(viewModel.Tasks));
+        Assert.Same(task, viewModel.SelectedTask);
+        Assert.Equal("check", task.Name);
+        Assert.Equal(ManagedTaskType.PowerShellScript, task.Type);
+        Assert.Equal(path, task.Path);
+        Assert.Equal("C:\\Scripts", task.WorkingDirectory);
+        Assert.Equal(ManagedTaskRunMode.RunOnce, task.RunMode);
+        Assert.True(task.IsEnabled);
+        Assert.Equal(1, config.SaveCount);
+        Assert.Same(task, Assert.Single(config.LastSavedTasks));
+    }
+
+    [Fact]
+    public async Task MainViewModel_ImportTaskAsync_CreatesSelectsAndSavesExecutableTaskFromPath()
+    {
+        var config = new FakeTaskConfigService();
+        var viewModel = CreateViewModel(config);
+        var path = "C:\\Program Files\\Sample App\\Sample App.exe";
+
+        var task = await viewModel.ImportTaskAsync(ManagedTaskType.Executable, path);
+
+        Assert.Same(task, Assert.Single(viewModel.Tasks));
+        Assert.Same(task, viewModel.SelectedTask);
+        Assert.Equal("Sample App", task.Name);
+        Assert.Equal(ManagedTaskType.Executable, task.Type);
+        Assert.Equal(path, task.Path);
+        Assert.Equal("C:\\Program Files\\Sample App", task.WorkingDirectory);
+        Assert.Equal(ManagedTaskRunMode.RunOnce, task.RunMode);
+        Assert.True(task.IsEnabled);
+        Assert.Equal(1, config.SaveCount);
+        Assert.Same(task, Assert.Single(config.LastSavedTasks));
+    }
+
+    [Fact]
+    public async Task MainViewModel_SaveCommand_SavesInlineEditedTasks()
+    {
+        var config = new FakeTaskConfigService();
+        var viewModel = CreateViewModel(config);
+        var task = new ManagedTask { Name = "旧名称", Type = ManagedTaskType.PowerShellScript };
+        viewModel.Tasks.Add(task);
+        viewModel.SelectedTask = task;
+        task.Name = "Sample App";
+        task.Type = ManagedTaskType.Executable;
+
+        viewModel.SaveCommand.Execute(null);
+        await AwaitCommandAsync(viewModel.SaveCommand);
+
+        var saved = Assert.Single(config.LastSavedTasks);
+        Assert.Same(task, saved);
+        Assert.Equal("Sample App", saved.Name);
+        Assert.Equal(ManagedTaskType.Executable, saved.Type);
+    }
+
+    [Fact]
+    public async Task MainViewModel_LoadAsync_SelectsFirstLoadedTask()
+    {
+        var first = new ManagedTask { Name = "Sample App" };
+        var second = new ManagedTask { Name = "Health Check" };
+        var config = new FakeTaskConfigService();
+        config.TasksToLoad.Add(first);
+        config.TasksToLoad.Add(second);
+        var viewModel = CreateViewModel(config);
+
+        await viewModel.LoadAsync();
+
+        Assert.Same(first, viewModel.SelectedTask);
+    }
+
+    [Fact]
+    public async Task MainViewModel_LoadAsync_UsesChineseAdministratorAutostartText()
+    {
+        var startup = new FakeStartupTaskService { Enabled = true };
+        var viewModel = CreateViewModel(startupTaskService: startup, isRunningAsAdministrator: true);
+
+        await viewModel.LoadAsync();
+
+        Assert.Equal("管理员", viewModel.CurrentPermissionText);
+        Assert.Equal("管理员开机自启已配置", viewModel.AutostartStatusText);
+        Assert.Equal("关闭管理员自启", viewModel.ToggleAutostartText);
+    }
+
+    [Fact]
+    public void MainViewModel_CurrentPermissionText_WhenNotAdministrator_ReturnsStandardUser()
+    {
+        var viewModel = CreateViewModel(isRunningAsAdministrator: false);
+
+        Assert.Equal("普通用户", viewModel.CurrentPermissionText);
+    }
+
+    [Fact]
     public async Task MainViewModel_AddOrUpdateTaskAsync_WhenNewTaskSaveFails_RollsBackAndLogs()
     {
         var config = new FakeTaskConfigService { SaveException = new IOException("save failed") };
@@ -308,14 +406,16 @@ public sealed class MainViewModelTests
         IProcessRunner? processRunner = null,
         IStartupTaskService? startupTaskService = null,
         ILogService? logService = null,
-        SynchronizationContext? updateContext = null)
+        SynchronizationContext? updateContext = null,
+        bool isRunningAsAdministrator = true)
     {
         return new MainViewModel(
             configService ?? new FakeTaskConfigService(),
             processRunner ?? new FakeProcessRunner(),
             startupTaskService ?? new FakeStartupTaskService(),
             logService ?? new FakeLogService(),
-            updateContext);
+            updateContext,
+            isRunningAsAdministrator);
     }
 
     private static async Task AwaitCommandAsync(ICommand command)

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using AutoPowerRunner.Models;
@@ -14,6 +15,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IStartupTaskService _startupTaskService;
     private readonly ILogService _logService;
     private readonly SynchronizationContext? _updateContext;
+    private readonly bool _isRunningAsAdministrator;
     private ManagedTask? _selectedTask;
     private bool _isAdministratorAutostartEnabled;
 
@@ -22,35 +24,45 @@ public sealed class MainViewModel : INotifyPropertyChanged
         IProcessRunner processRunner,
         IStartupTaskService startupTaskService,
         ILogService logService,
-        SynchronizationContext? updateContext = null)
+        SynchronizationContext? updateContext = null,
+        bool isRunningAsAdministrator = true)
     {
         _configService = configService;
         _processRunner = processRunner;
         _startupTaskService = startupTaskService;
         _logService = logService;
         _updateContext = updateContext;
+        _isRunningAsAdministrator = isRunningAsAdministrator;
 
+        SaveCommand = new AsyncRelayCommand(
+            _ => SaveAsync(),
+            _logService,
+            "无法保存任务。");
         RunSelectedCommand = new RelayCommand(_ => RunSelected(), _ => SelectedTask is not null);
         StopSelectedCommand = new RelayCommand(_ => StopSelected(), _ => SelectedTask is not null);
         DeleteSelectedCommand = new AsyncRelayCommand(
             _ => DeleteSelectedAsync(),
             _logService,
-            "Could not delete selected task.",
+            "无法删除选中的任务。",
             _ => SelectedTask is not null);
         ToggleSelectedEnabledCommand = new AsyncRelayCommand(
             _ => ToggleSelectedEnabledAsync(),
             _logService,
-            "Could not update selected task.",
+            "无法更新选中的任务。",
             _ => SelectedTask is not null);
         RunAllEnabledCommand = new RelayCommand(_ => RunAllEnabled());
         StopAllCommand = new RelayCommand(_ => StopAll());
         ToggleAutostartCommand = new AsyncRelayCommand(
             _ => ToggleAutostartAsync(),
             _logService,
-            "Could not toggle administrator autostart.");
+            "无法切换管理员自启。");
     }
 
     public ObservableCollection<ManagedTask> Tasks { get; } = [];
+
+    public IReadOnlyList<ManagedTaskType> TaskTypes { get; } = Enum.GetValues<ManagedTaskType>();
+
+    public IReadOnlyList<ManagedTaskRunMode> RunModes { get; } = Enum.GetValues<ManagedTaskRunMode>();
 
     public ManagedTask? SelectedTask
     {
@@ -76,15 +88,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     public string AutostartStatusText => IsAdministratorAutostartEnabled
-        ? "Administrator autostart is enabled"
-        : "Administrator autostart is disabled";
+        ? "管理员开机自启已配置"
+        : "管理员开机自启未配置";
+
+    public string CurrentPermissionText => _isRunningAsAdministrator ? "管理员" : "普通用户";
 
     public string ToggleAutostartText => IsAdministratorAutostartEnabled
-        ? "Disable administrator autostart"
-        : "Enable administrator autostart";
+        ? "关闭管理员自启"
+        : "开启管理员自启";
 
     public string LogFile => _logService.LogFile;
 
+    public ICommand SaveCommand { get; }
     public ICommand RunSelectedCommand { get; }
     public ICommand StopSelectedCommand { get; }
     public ICommand DeleteSelectedCommand { get; }
@@ -103,12 +118,30 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Tasks.Add(task);
         }
 
+        SelectedTask = Tasks.FirstOrDefault();
         IsAdministratorAutostartEnabled = _startupTaskService.IsEnabled();
     }
 
     public async Task SaveAsync()
     {
         await _configService.SaveAsync(Tasks);
+    }
+
+    public async Task<ManagedTask> ImportTaskAsync(ManagedTaskType type, string path)
+    {
+        var task = new ManagedTask
+        {
+            Name = Path.GetFileNameWithoutExtension(path),
+            Type = type,
+            Path = path,
+            WorkingDirectory = Path.GetDirectoryName(path) ?? "",
+            RunMode = ManagedTaskRunMode.RunOnce,
+            IsEnabled = true
+        };
+
+        await AddOrUpdateTaskAsync(task);
+        SelectedTask = task;
+        return task;
     }
 
     public async Task AddOrUpdateTaskAsync(ManagedTask task)

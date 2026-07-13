@@ -57,14 +57,14 @@ public partial class TaskEditorWindow : Window
     {
         if (string.IsNullOrWhiteSpace(NameBox.Text))
         {
-            MessageBox.Show(this, "Name is required.", "Task", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "请填写任务名称。", "任务", MessageBoxButton.OK, MessageBoxImage.Warning);
             NameBox.Focus();
             return;
         }
 
         if (string.IsNullOrWhiteSpace(PathBox.Text))
         {
-            MessageBox.Show(this, "Path is required.", "Task", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "请选择文件路径。", "任务", MessageBoxButton.OK, MessageBoxImage.Warning);
             PathBox.Focus();
             return;
         }
@@ -88,7 +88,7 @@ public partial class TaskEditorWindow : Window
     private string GetFileFilter()
     {
         return TypeBox.SelectedItem is ManagedTaskType.Executable
-            ? "Executable (*.exe)|*.exe|All files (*.*)|*.*"
-            : "PowerShell script (*.ps1)|*.ps1|All files (*.*)|*.*";
+            ? "EXE 程序 (*.exe)|*.exe|所有文件 (*.*)|*.*"
+            : "PowerShell 脚本 (*.ps1)|*.ps1|所有文件 (*.*)|*.*";
     }
 }

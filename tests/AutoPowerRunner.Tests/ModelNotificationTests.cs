@@ -31,4 +31,24 @@ public sealed class ModelNotificationTests
         Assert.Contains(nameof(TaskRuntimeResult.Status), changedProperties);
         Assert.Contains(nameof(TaskRuntimeResult.Summary), changedProperties);
     }
+
+    [Fact]
+    public void TaskRuntimeResult_Summary_UsesChineseDisplayText()
+    {
+        var result = new TaskRuntimeResult
+        {
+            Status = TaskRuntimeStatus.Running,
+            StartedAt = new DateTimeOffset(2026, 7, 5, 19, 30, 0, TimeSpan.FromHours(8))
+        };
+
+        Assert.Equal("运行中，自 2026-07-05 19:30:00 起", result.Summary);
+
+        result.Status = TaskRuntimeStatus.Exited;
+        result.ExitCode = 0;
+        Assert.Equal("已退出，退出码 0", result.Summary);
+
+        result.Status = TaskRuntimeStatus.FailedToStart;
+        result.Error = "文件不存在";
+        Assert.Equal("启动失败：文件不存在", result.Summary);
+    }
 }

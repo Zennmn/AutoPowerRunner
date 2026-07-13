@@ -32,7 +32,8 @@ public sealed class ProcessRunner : IProcessRunner
                 Arguments = BuildPowerShellArguments(task),
                 WorkingDirectory = workingDirectory,
                 UseShellExecute = false,
-                CreateNoWindow = false
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
         }
 
@@ -42,7 +43,8 @@ public sealed class ProcessRunner : IProcessRunner
             Arguments = task.Arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
-            CreateNoWindow = false
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
         };
     }
 
@@ -166,7 +168,7 @@ public sealed class ProcessRunner : IProcessRunner
 
     private static string BuildPowerShellArguments(ManagedTask task)
     {
-        var fixedArguments = $"-ExecutionPolicy Bypass -File \"{task.Path}\"";
+        var fixedArguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{task.Path}\"";
 
         // ManagedTask.Arguments is a user-provided raw command-line fragment.
         return string.IsNullOrWhiteSpace(task.Arguments)

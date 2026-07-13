@@ -13,7 +13,7 @@ public sealed class StartupTaskServiceTests
             userName: @"DESKTOP\User");
 
         Assert.Equal(
-            "/Create /TN \"AutoPowerRunner\" /SC ONLOGON /RL HIGHEST /RU \"DESKTOP\\User\" /TR \"\\\"C:\\Program Files\\AutoPowerRunner\\AutoPowerRunner.exe\\\"\" /F",
+            "/Create /TN \"AutoPowerRunner\" /SC ONLOGON /RL HIGHEST /RU \"DESKTOP\\User\" /TR \"\\\"C:\\Program Files\\AutoPowerRunner\\AutoPowerRunner.exe\\\" --silent-startup\" /F",
             args);
     }
 
@@ -54,7 +54,7 @@ public sealed class StartupTaskServiceTests
                 return new StartupTaskService.CommandResult(0, $"""
                     Folder: \
                     TaskName: AutoPowerRunner
-                    Task To Run: "{executablePath}"
+                    Task To Run: "{executablePath}" --silent-startup
                     Status: Ready
                     Run Level: Highest
                     """, "");
@@ -63,7 +63,7 @@ public sealed class StartupTaskServiceTests
         var enabled = service.IsEnabled();
 
         Assert.True(enabled);
-        Assert.Equal([(StartupTaskService.BuildQueryVerboseArguments("AutoPowerRunner"), false)], commands);
+        Assert.Equal([(StartupTaskService.BuildQueryXmlArguments("AutoPowerRunner"), false)], commands);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class StartupTaskServiceTests
             commandRunner: (_, _) => new StartupTaskService.CommandResult(0, $"""
                 Folder: \
                 TaskName: AutoPowerRunner
-                Task To Run: "{executablePath}" --some-arg
+                Task To Run: "{executablePath}" --silent-startup --some-arg
                 Status: Ready
                 Run Level: Highest
                 """, ""));
@@ -93,9 +93,40 @@ public sealed class StartupTaskServiceTests
             commandRunner: (_, _) => new StartupTaskService.CommandResult(0, """
                 Folder: \
                 TaskName: AutoPowerRunner
-                Task To Run: "c:\program files\autopowerrunner\autopowerrunner.exe"
+                Task To Run: "c:\program files\autopowerrunner\autopowerrunner.exe" --silent-startup
                 Status: Ready
                 Run Level: Highest
+                """, ""));
+
+        var enabled = service.IsEnabled();
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public void IsEnabled_WhenXmlOutputMatchesExecutablePathAndSilentArgument_ReturnsTrue()
+    {
+        var executablePath = @"C:\Tools\AutoPowerRunner\AutoPowerRunner.exe";
+        var service = new StartupTaskService(
+            executablePath,
+            commandRunner: (_, _) => new StartupTaskService.CommandResult(0, """
+                <?xml version="1.0" encoding="UTF-16"?>
+                <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+                  <Principals>
+                    <Principal id="Author">
+                      <RunLevel>HighestAvailable</RunLevel>
+                    </Principal>
+                  </Principals>
+                  <Settings>
+                    <Enabled>true</Enabled>
+                  </Settings>
+                  <Actions Context="Author">
+                    <Exec>
+                      <Command>"C:\Tools\AutoPowerRunner\AutoPowerRunner.exe"</Command>
+                      <Arguments>--silent-startup</Arguments>
+                    </Exec>
+                  </Actions>
+                </Task>
                 """, ""));
 
         var enabled = service.IsEnabled();
@@ -166,8 +197,27 @@ public sealed class StartupTaskServiceTests
             commandRunner: (_, _) => new StartupTaskService.CommandResult(0, $"""
                 Folder: \
                 TaskName: AutoPowerRunner
-                Task To Run: "{executablePath}"
+                Task To Run: "{executablePath}" --silent-startup
                 Status: Disabled
+                Run Level: Highest
+                """, ""));
+
+        var enabled = service.IsEnabled();
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
+    public void IsEnabled_WhenVerboseOutputMatchesExecutablePathButMissingSilentStartupArgument_ReturnsFalse()
+    {
+        var executablePath = @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe";
+        var service = new StartupTaskService(
+            executablePath,
+            commandRunner: (_, _) => new StartupTaskService.CommandResult(0, $"""
+                Folder: \
+                TaskName: AutoPowerRunner
+                Task To Run: "{executablePath}"
+                Status: Ready
                 Run Level: Highest
                 """, ""));
 
@@ -207,6 +257,48 @@ public sealed class StartupTaskServiceTests
             userName: "DESKTOP\\Us\"er"));
 
         Assert.Equal("userName", exception.ParamName);
+    }
+
+    [Fact]
+    public void IsEnabled_WithSynchronizationContext_DoesNotDeadlock()
+    {
+        Exception? threadException = null;
+        var completed = false;
+        var taskName = $"AutoPowerRunner.UnitTest.{Guid.NewGuid():N}";
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
+            try
+            {
+                var service = new StartupTaskService(
+                    @"C:\Program Files\AutoPowerRunner\AutoPowerRunner.exe",
+                    taskName: taskName);
+
+                Assert.False(service.IsEnabled());
+                completed = true;
+            }
+            catch (Exception ex)
+            {
+                threadException = ex;
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(null);
+            }
+        })
+        {
+            IsBackground = true
+        };
+
+        thread.Start();
+
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "IsEnabled did not return while a synchronization context was installed.");
+        if (threadException is not null)
+        {
+            throw threadException;
+        }
+
+        Assert.True(completed);
     }
 
     [Fact]

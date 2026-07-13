@@ -3,63 +3,529 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AutoPowerRunner"
         mc:Ignorable="d"
-        Title="Auto Power Runner"
-        Width="920"
-        Height="560"
-        MinWidth="760"
-        MinHeight="460">
-    <DockPanel Margin="12" LastChildFill="True">
-        <Border DockPanel.Dock="Top"
-                Margin="0,0,0,10"
-                Padding="12"
-                BorderBrush="#D0D7DE"
-                BorderThickness="1"
-                CornerRadius="4"
-                Background="#F6F8FA">
-            <DockPanel LastChildFill="True">
-                <Button DockPanel.Dock="Right"
-                        MinWidth="190"
-                        Padding="12,6"
-                        Command="{Binding ToggleAutostartCommand}"
-                        Content="{Binding ToggleAutostartText}" />
-                <TextBlock VerticalAlignment="Center"
-                           FontWeight="SemiBold"
-                           Text="{Binding AutostartStatusText}" />
-            </DockPanel>
+        Title="管理员自启动器"
+        Icon="{StaticResource AppShieldLogoImage}"
+        Width="1280"
+        Height="760"
+        MinWidth="1180"
+        MinHeight="700"
+        Background="#F4F8FC"
+        FontFamily="Microsoft YaHei UI"
+        FontSize="14">
+    <Window.Resources>
+        <local:ChineseDisplayConverter x:Key="ChineseDisplay" />
+
+        <SolidColorBrush x:Key="Blue" Color="#0D73E8" />
+        <SolidColorBrush x:Key="BlueLight" Color="#E8F3FF" />
+        <SolidColorBrush x:Key="Green" Color="#168A2E" />
+        <SolidColorBrush x:Key="Line" Color="#D6E2EF" />
+        <SolidColorBrush x:Key="TextMain" Color="#101828" />
+        <SolidColorBrush x:Key="TextSubtle" Color="#667085" />
+
+        <Style x:Key="PanelBorder" TargetType="Border">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Padding" Value="16,7" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#C7D4E4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource TextMain}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#F7FBFF" />
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#8FB9EC" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#0D73E8" />
+            <Setter Property="BorderBrush" Value="#0D73E8" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="LabelText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextMain}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+        </Style>
+
+        <Style x:Key="FieldBox" TargetType="TextBox">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="BorderBrush" Value="#C7D4E4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="ReadOnlyFieldBox" TargetType="TextBox" BasedOn="{StaticResource FieldBox}">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Arrow" />
+            <Setter Property="Background" Value="#F8FBFE" />
+            <Setter Property="Foreground" Value="{StaticResource TextMain}" />
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#E5EDF6" />
+            <Setter Property="VerticalGridLinesBrush" Value="#EAF1F8" />
+            <Setter Property="RowHeight" Value="46" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="AlternatingRowBackground" Value="#FBFDFF" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Background" Value="#F8FBFE" />
+            <Setter Property="BorderBrush" Value="#E1EAF4" />
+            <Setter Property="Foreground" Value="{StaticResource TextMain}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#E8F3FF" />
+                    <Setter Property="BorderBrush" Value="#1D80F0" />
+                    <Setter Property="BorderThickness" Value="1" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="14,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{StaticResource TextMain}" />
+        </Style>
+
+        <Style x:Key="CenteredDataGridCell" TargetType="DataGridCell">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style x:Key="CenteredColumnHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style x:Key="GridCheckBox" TargetType="CheckBox">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="CheckFrame"
+                                Width="16"
+                                Height="16"
+                                Background="#FFFFFF"
+                                BorderBrush="#8A98A8"
+                                BorderThickness="1"
+                                CornerRadius="1">
+                            <Path x:Name="CheckGlyph"
+                                  Data="M3.5,8 L6.7,11.2 L12.7,4.8"
+                                  Stroke="{StaticResource Blue}"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Visibility="Collapsed" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckFrame" Property="BorderBrush" Value="{StaticResource Blue}" />
+                                <Setter TargetName="CheckFrame" Property="Background" Value="#E8F3FF" />
+                                <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ButtonIcon" TargetType="TextBlock">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="LineHeight" Value="20" />
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="112" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="74" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Padding="22,18"
+                Background="#FFFFFF"
+                BorderBrush="#D8E3EF"
+                BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Image Width="58"
+                           Height="64"
+                           Source="{StaticResource AppShieldLogoImage}"
+                           Stretch="Uniform" />
+                    <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="管理员自启动器"
+                                   FontSize="25"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextMain}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="{StaticResource TextSubtle}"
+                                   Text="登录后以管理员权限启动脚本和程序" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Text="当前权限：" />
+                    <Border Margin="0,0,14,0"
+                            MinWidth="72"
+                            Height="38"
+                            Padding="12,0"
+                            Background="#EEF8F1"
+                            CornerRadius="5">
+                        <TextBlock Text="{Binding CurrentPermissionText}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource Green}" />
+                    </Border>
+                    <Border Margin="0,0,22,0"
+                            Padding="12,7"
+                            Background="#F0FAF3"
+                            BorderBrush="#BDE4C7"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource ButtonIcon}"
+                                       Text="&#xE73E;"
+                                       Foreground="{StaticResource Green}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Margin="8,0,0,0"
+                                       Text="{Binding AutostartStatusText}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource Green}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <Button MinWidth="144" Command="{Binding ToggleAutostartCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE7E8;" />
+                            <TextBlock Margin="9,0,0,0" Text="{Binding ToggleAutostartText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <Border DockPanel.Dock="Bottom"
-                Margin="0,10,0,0"
-                Padding="0"
-                BorderThickness="0">
+        <Grid Grid.Row="1" Margin="16,14,16,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="0.72*" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="1*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Padding="18">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="启动项目"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextMain}" />
+
+                    <StackPanel Grid.Row="1"
+                                Margin="0,14,0,16"
+                                Orientation="Horizontal">
+                        <Button MinWidth="122" Click="ImportPowerShellScript_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE710;" Foreground="{StaticResource Blue}" />
+                                <TextBlock Margin="8,0,0,0" Text="新增脚本" />
+                            </StackPanel>
+                        </Button>
+                        <Button MinWidth="122" Click="ImportExecutable_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE710;" Foreground="{StaticResource Blue}" />
+                                <TextBlock Margin="8,0,0,0" Text="新增程序" />
+                            </StackPanel>
+                        </Button>
+                        <Button MinWidth="96" Command="{Binding DeleteSelectedCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE74D;" />
+                                <TextBlock Margin="8,0,0,0" Text="删除" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <DataGrid Grid.Row="2"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              IsReadOnly="True"
+                              ItemsSource="{Binding Tasks}"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Width="1.7*" Header="名称">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+                                            <Border Width="24"
+                                                    Height="24"
+                                                    CornerRadius="4"
+                                                    Background="{StaticResource Blue}">
+                                                <Viewbox Margin="5" Stretch="Uniform">
+                                                    <Canvas Width="16" Height="16">
+                                                        <Path x:Name="TaskIconPath"
+                                                              Stroke="#FFFFFF"
+                                                              StrokeThickness="1.6"
+                                                              StrokeLineJoin="Round"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              Data="M4,2 L10,2 L13,5 L13,14 L4,14 Z M10,2 L10,5 L13,5" />
+                                                    </Canvas>
+                                                </Viewbox>
+                                            </Border>
+                                            <TextBlock Margin="10,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Type}" Value="PowerShellScript">
+                                                <Setter TargetName="TaskIconPath" Property="Data" Value="M3,4 L13,4 L13,12 L3,12 Z M5,7 L7,8 L5,9 M8,10 L11,10" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Type}" Value="Executable">
+                                                <Setter TargetName="TaskIconPath" Property="Data" Value="M4,2 L10,2 L13,5 L13,14 L4,14 Z M10,2 L10,5 L13,5" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Width="1.15*" Header="类型" Binding="{Binding Type, Converter={StaticResource ChineseDisplay}}" ElementStyle="{StaticResource CellText}" />
+                            <DataGridTemplateColumn Width="70"
+                                                    Header="启用"
+                                                    HeaderStyle="{StaticResource CenteredColumnHeader}"
+                                                    CellStyle="{StaticResource CenteredDataGridCell}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                            <CheckBox Style="{StaticResource GridCheckBox}"
+                                                      IsChecked="{Binding IsEnabled}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Width="1.1*" Header="最近状态">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+                                            <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="{StaticResource Green}" />
+                                            <TextBlock Margin="9,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding LastResult, Converter={StaticResource ChineseDisplay}}"
+                                                       Foreground="{StaticResource Green}" />
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="FailedToStart">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="#D92D20" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastResult.Status}" Value="NotRunning">
+                                                <Setter TargetName="StatusDot" Property="Fill" Value="#8A98A8" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource PanelBorder}" Padding="20,18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="项目详情"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextMain}" />
+
+                        <Grid Grid.Row="1" Margin="0,18,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="116" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="52" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelText}" Text="名称" />
+                            <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelText}" Text="类型" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Grid.ColumnSpan="2"
+                                     Style="{StaticResource ReadOnlyFieldBox}"
+                                     Text="{Binding SelectedTask.Type, Converter={StaticResource ChineseDisplay}}" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelText}" Text="路径" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Path, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="2" Grid.Column="2" MinWidth="42" Margin="8,0,0,12" Padding="0" Click="BrowseTarget_Click">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8B7;" />
+                            </Button>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelText}" Text="参数" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource LabelText}" Text="工作目录" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource FieldBox}" Text="{Binding SelectedTask.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="4" Grid.Column="2" MinWidth="42" Margin="8,0,0,12" Padding="0" Click="BrowseWorkingDirectory_Click">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8B7;" />
+                            </Button>
+
+                            <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,14" Content="启用此项目" IsChecked="{Binding SelectedTask.IsEnabled, Mode=TwoWay}" />
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource LabelText}" Text="最后启动" />
+                            <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource LabelText}" Text="{Binding SelectedTask.LastResult.StartedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}, TargetNullValue=--}" />
+
+                            <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource LabelText}" Text="最后结束" />
+                            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource LabelText}" Text="{Binding SelectedTask.LastResult.ExitedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}, TargetNullValue=--}" />
+
+                            <TextBlock Grid.Row="8" Grid.Column="0" Style="{StaticResource LabelText}" Text="退出码" />
+                            <TextBlock Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource LabelText}" Text="{Binding SelectedTask.LastResult.ExitCode, TargetNullValue=--}" />
+
+                            <TextBlock Grid.Row="9" Grid.Column="0" Style="{StaticResource LabelText}" Text="状态" />
+                            <StackPanel Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,12" Orientation="Horizontal">
+                                <Ellipse Width="10" Height="10" Fill="{StaticResource Green}" VerticalAlignment="Center" />
+                                <TextBlock Margin="9,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource Green}"
+                                           Text="{Binding SelectedTask.LastResult, Converter={StaticResource ChineseDisplay}}" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="10" Grid.Column="0" Style="{StaticResource LabelText}" Text="最后错误" />
+                            <TextBlock Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="2"
+                                       Style="{StaticResource LabelText}"
+                                       Text="{Binding SelectedTask.LastResult.Error, TargetNullValue=无}"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Padding="18,12"
+                Background="#FFFFFF"
+                BorderBrush="#D8E3EF"
+                BorderThickness="0,1,0,0">
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                <Button MinWidth="72" Margin="0,0,6,0" Padding="10,6" Click="AddTask_Click" Content="Add" />
-                <Button MinWidth="72" Margin="0,0,6,0" Padding="10,6" Click="EditTask_Click" Content="Edit" />
-                <Button MinWidth="72" Margin="0,0,6,0" Padding="10,6" Command="{Binding DeleteSelectedCommand}" Content="Delete" />
-                <Button MinWidth="112" Margin="0,0,6,0" Padding="10,6" Command="{Binding ToggleSelectedEnabledCommand}" Content="Enable/Disable" />
-                <Button MinWidth="72" Margin="0,0,6,0" Padding="10,6" Command="{Binding RunSelectedCommand}" Content="Run" />
-                <Button MinWidth="72" Margin="0,0,6,0" Padding="10,6" Command="{Binding StopSelectedCommand}" Content="Stop" />
-                <Button MinWidth="88" Padding="10,6" Click="OpenLog_Click" Content="Open Log" />
+                <Button MinWidth="128" Click="OpenLog_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE7C3;" />
+                        <TextBlock Margin="9,0,0,0" Text="打开日志" />
+                    </StackPanel>
+                </Button>
+                <Button MinWidth="116" Command="{Binding StopSelectedCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE71A;" />
+                        <TextBlock Margin="9,0,0,0" Text="停止" />
+                    </StackPanel>
+                </Button>
+                <Button MinWidth="142" Command="{Binding RunSelectedCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE768;" Foreground="{StaticResource Blue}" />
+                        <TextBlock Margin="9,0,0,0" Text="立即运行" />
+                    </StackPanel>
+                </Button>
+                <Button MinWidth="122" Margin="0" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE105;" />
+                        <TextBlock Margin="9,0,0,0" Text="保存" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Border>
-
-        <DataGrid AutoGenerateColumns="False"
-                  CanUserAddRows="False"
-                  CanUserDeleteRows="False"
-                  IsReadOnly="True"
-                  ItemsSource="{Binding Tasks}"
-                  SelectionMode="Single"
-                  SelectionUnit="FullRow"
-                  SelectedItem="{Binding SelectedTask, Mode=TwoWay}">
-            <DataGrid.Columns>
-                <DataGridTextColumn Width="2*" Header="Name" Binding="{Binding Name}" />
-                <DataGridTextColumn Width="*" Header="Type" Binding="{Binding Type}" />
-                <DataGridTextColumn Width="*" Header="Mode" Binding="{Binding RunMode}" />
-                <DataGridCheckBoxColumn Width="80" Header="Enabled" Binding="{Binding IsEnabled}" />
-                <DataGridTextColumn Width="*" Header="Status" Binding="{Binding LastResult.Status}" />
-                <DataGridTextColumn Width="2*" Header="Recent Result" Binding="{Binding LastResult.Summary}" />
-            </DataGrid.Columns>
-        </DataGrid>
-    </DockPanel>
+    </Grid>
 </Window>

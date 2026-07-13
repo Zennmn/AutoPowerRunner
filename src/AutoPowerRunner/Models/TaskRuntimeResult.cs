@@ -75,10 +75,10 @@ public sealed class TaskRuntimeResult : INotifyPropertyChanged
         {
             return Status switch
             {
-                TaskRuntimeStatus.NotRunning => "Not running",
-                TaskRuntimeStatus.Running => StartedAt is null ? "Running" : $"Running since {StartedAt:yyyy-MM-dd HH:mm:ss}",
-                TaskRuntimeStatus.Exited => ExitCode is null ? "Exited" : $"Exited with code {ExitCode}",
-                TaskRuntimeStatus.FailedToStart => string.IsNullOrWhiteSpace(Error) ? "Failed to start" : $"Failed: {Error}",
+                TaskRuntimeStatus.NotRunning => "未运行",
+                TaskRuntimeStatus.Running => StartedAt is null ? "运行中" : $"运行中，自 {StartedAt:yyyy-MM-dd HH:mm:ss} 起",
+                TaskRuntimeStatus.Exited => ExitCode is null ? "已退出" : $"已退出，退出码 {ExitCode}",
+                TaskRuntimeStatus.FailedToStart => string.IsNullOrWhiteSpace(Error) ? "启动失败" : $"启动失败：{Error}",
                 _ => Status.ToString()
             };
         }

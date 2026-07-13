@@ -1,5 +1,23 @@
 .worktrees/
+.codegraph/
+.planning/
+.vs/
 
 # .NET build output
 bin/
 obj/
+
+# Local publish/package output
+dist/
+publish/
+
+# Local app data and logs
+config.json
+*.log
+
+# Local UI verification screenshots
+autopowerrunner-*.png
+
+# User/machine files
+*.user
+*.suo

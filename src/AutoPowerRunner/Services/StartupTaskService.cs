@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
+using System.Xml.Linq;
 using System.Threading.Tasks;
 
 namespace AutoPowerRunner.Services;
@@ -9,6 +10,7 @@ namespace AutoPowerRunner.Services;
 public sealed class StartupTaskService : IStartupTaskService
 {
     public const string DefaultTaskName = "AutoPowerRunner";
+    public const string SilentStartupArgument = "--silent-startup";
 
     private readonly string _taskName;
     private readonly string _executablePath;
@@ -42,7 +44,7 @@ public sealed class StartupTaskService : IStartupTaskService
         EnsureNoDoubleQuote(executablePath, nameof(executablePath));
         EnsureNoDoubleQuote(userName, nameof(userName));
 
-        var quotedTarget = $"\\\"{executablePath}\\\"";
+        var quotedTarget = $"\\\"{executablePath}\\\" {SilentStartupArgument}";
         return $"/Create /TN \"{taskName}\" /SC ONLOGON /RL HIGHEST /RU \"{userName}\" /TR \"{quotedTarget}\" /F";
     }
 
@@ -67,6 +69,13 @@ public sealed class StartupTaskService : IStartupTaskService
         return $"/Query /TN \"{taskName}\" /V /FO LIST";
     }
 
+    public static string BuildQueryXmlArguments(string taskName)
+    {
+        EnsureNoDoubleQuote(taskName, nameof(taskName));
+
+        return $"/Query /TN \"{taskName}\" /XML";
+    }
+
     public static string GetSchtasksPath()
     {
         return Path.Combine(
@@ -77,7 +86,7 @@ public sealed class StartupTaskService : IStartupTaskService
 
     public bool IsEnabled()
     {
-        var result = RunCommand(BuildQueryVerboseArguments(_taskName), runAsAdmin: false, operation: "query");
+        var result = RunCommand(BuildQueryXmlArguments(_taskName), runAsAdmin: false, operation: "query");
         return result.ExitCode == 0 && QueryOutputMatchesCurrentEnabledTask(result.Output, _executablePath);
     }
 
@@ -138,10 +147,10 @@ public sealed class StartupTaskService : IStartupTaskService
         var outputTask = startInfo.RedirectStandardOutput ? process.StandardOutput.ReadToEndAsync() : Task.FromResult("");
         var errorTask = startInfo.RedirectStandardError ? process.StandardError.ReadToEndAsync() : Task.FromResult("");
 
-        await process.WaitForExitAsync();
+        await process.WaitForExitAsync().ConfigureAwait(false);
 
-        var output = await outputTask;
-        var error = await errorTask;
+        var output = await outputTask.ConfigureAwait(false);
+        var error = await errorTask.ConfigureAwait(false);
         return new CommandResult(process.ExitCode, output, error);
     }
 
@@ -183,6 +192,11 @@ public sealed class StartupTaskService : IStartupTaskService
             return false;
         }
 
+        if (XmlOutputMatchesCurrentEnabledTask(output, executablePath))
+        {
+            return true;
+        }
+
         var taskToRun = GetListField(output, "Task To Run");
         if (taskToRun is null)
         {
@@ -195,8 +209,58 @@ public sealed class StartupTaskService : IStartupTaskService
             return false;
         }
 
+        if (!taskToRun.Contains(SilentStartupArgument, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         var status = GetListField(output, "Status");
         return status is null || !status.Contains("Disabled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool XmlOutputMatchesCurrentEnabledTask(string output, string executablePath)
+    {
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(output);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
+
+        var ns = document.Root?.Name.Namespace ?? XNamespace.None;
+        var exec = document.Descendants(ns + "Exec").FirstOrDefault();
+        if (exec is null)
+        {
+            return false;
+        }
+
+        var command = exec.Element(ns + "Command")?.Value;
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return false;
+        }
+
+        var taskExecutablePath = ExtractExecutablePath(command);
+        if (taskExecutablePath is null || !PathsMatch(taskExecutablePath, executablePath))
+        {
+            return false;
+        }
+
+        var arguments = exec.Element(ns + "Arguments")?.Value ?? "";
+        if (!command.Contains(SilentStartupArgument, StringComparison.OrdinalIgnoreCase)
+            && !arguments.Contains(SilentStartupArgument, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var enabled = document.Descendants(ns + "Settings")
+            .Elements(ns + "Enabled")
+            .FirstOrDefault()
+            ?.Value;
+        return !string.Equals(enabled, "false", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ExtractExecutablePath(string taskToRun)

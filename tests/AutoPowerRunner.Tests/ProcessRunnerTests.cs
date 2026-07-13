@@ -25,6 +25,10 @@ public sealed class ProcessRunnerTests
         Assert.EndsWith("-Mode Fast", startInfo.Arguments);
         Assert.Equal(@"C:\Scripts", startInfo.WorkingDirectory);
         Assert.False(startInfo.UseShellExecute);
+        Assert.True(startInfo.CreateNoWindow);
+        Assert.Equal(ProcessWindowStyle.Hidden, startInfo.WindowStyle);
+        Assert.Contains("-NoProfile", startInfo.Arguments);
+        Assert.Contains("-WindowStyle Hidden", startInfo.Arguments);
     }
 
     [Fact]
@@ -47,6 +51,8 @@ public sealed class ProcessRunnerTests
         Assert.EndsWith(rawArguments, startInfo.Arguments);
         Assert.Equal(@"C:\Scripts With Spaces", startInfo.WorkingDirectory);
         Assert.False(startInfo.UseShellExecute);
+        Assert.True(startInfo.CreateNoWindow);
+        Assert.Equal(ProcessWindowStyle.Hidden, startInfo.WindowStyle);
     }
 
     [Fact]
@@ -66,6 +72,8 @@ public sealed class ProcessRunnerTests
         Assert.Equal("--quiet", startInfo.Arguments);
         Assert.Equal(@"C:\Tools", startInfo.WorkingDirectory);
         Assert.False(startInfo.UseShellExecute);
+        Assert.True(startInfo.CreateNoWindow);
+        Assert.Equal(ProcessWindowStyle.Hidden, startInfo.WindowStyle);
     }
 
     [Fact]
