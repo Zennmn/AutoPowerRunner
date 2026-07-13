@@ -17,6 +17,8 @@ public partial class App : System.Windows.Application
 {
     private const string SingleInstanceMutexName = "AutoPowerRunner.SingleInstance";
     private const string ActivationEventName = "AutoPowerRunner.ActivateExisting";
+    private const int DwmWindowCornerPreferenceAttribute = 33;
+    private const int DwmWindowCornerPreferenceRoundSmall = 3;
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _activationEvent;
     private RegisteredWaitHandle? _activationRegistration;
@@ -30,6 +32,13 @@ public partial class App : System.Windows.Application
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr windowHandle,
+        int attribute,
+        ref int attributeValue,
+        int attributeSize);
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -140,8 +149,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add(CreateTraySeparator());
         menu.Items.Add(CreateTrayMenuItem("退出", (_, _) => ExitApplication()));
         menu.Opening += (_, _) => UpdateTrayAutostartMenuText();
-        menu.Opened += (_, _) => ApplyTrayMenuRegion(menu);
-        menu.SizeChanged += (_, _) => ApplyTrayMenuRegion(menu);
+        menu.Opened += (_, _) => ApplyTrayMenuCornerStyle(menu);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
         _trayIcon = new Forms.NotifyIcon
@@ -197,24 +205,30 @@ public partial class App : System.Windows.Application
         };
     }
 
-    private static void ApplyTrayMenuRegion(Forms.ContextMenuStrip menu)
+    private static void ApplyTrayMenuCornerStyle(Forms.ContextMenuStrip menu)
     {
-        if (menu.Width <= 0 || menu.Height <= 0)
+        var previousRegion = menu.Region;
+        menu.Region = null;
+        previousRegion?.Dispose();
+
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
         {
             return;
         }
 
-        using var path = CreateRoundedPath(new Drawing.Rectangle(0, 0, menu.Width, menu.Height), 5);
-        var previousRegion = menu.Region;
-        menu.Region = new Drawing.Region(path);
-        previousRegion?.Dispose();
+        var preference = DwmWindowCornerPreferenceRoundSmall;
+        _ = DwmSetWindowAttribute(
+            menu.Handle,
+            DwmWindowCornerPreferenceAttribute,
+            ref preference,
+            sizeof(int));
     }
 
-    private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Drawing.Rectangle bounds, int radius)
+    private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Drawing.RectangleF bounds, float radius)
     {
         var path = new System.Drawing.Drawing2D.GraphicsPath();
         var diameter = radius * 2;
-        var arc = new Drawing.Rectangle(bounds.X, bounds.Y, diameter, diameter);
+        var arc = new Drawing.RectangleF(bounds.X, bounds.Y, diameter, diameter);
 
         path.AddArc(arc, 180, 90);
         arc.X = bounds.Right - diameter;
@@ -278,10 +292,15 @@ public partial class App : System.Windows.Application
 
         protected override void OnRenderToolStripBorder(Forms.ToolStripRenderEventArgs e)
         {
-            var bounds = new Drawing.Rectangle(0, 0, Math.Max(1, e.ToolStrip.Width - 1), Math.Max(1, e.ToolStrip.Height - 1));
-            using var path = CreateRoundedPath(bounds, 5);
+            var bounds = new Drawing.RectangleF(
+                0.5f,
+                0.5f,
+                Math.Max(1f, e.ToolStrip.Width - 1f),
+                Math.Max(1f, e.ToolStrip.Height - 1f));
+            using var path = CreateRoundedPath(bounds, 5f);
             using var pen = new Drawing.Pen(Drawing.Color.FromArgb(0xD8, 0xD8, 0xD8));
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
             e.Graphics.DrawPath(pen, path);
         }
 
