@@ -115,16 +115,33 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("打开窗口", null, (_, _) => OpenMainWindow());
-        menu.Items.Add("运行所有启用任务", null, (_, _) => _viewModel.RunAllEnabledCommand.Execute(null));
-        menu.Items.Add("停止所有运行任务", null, (_, _) => _viewModel.StopAllCommand.Execute(null));
-        _autostartMenuItem = new Forms.ToolStripMenuItem(
+        var menu = new Forms.ContextMenuStrip
+        {
+            AutoSize = true,
+            BackColor = Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA),
+            DropShadowEnabled = true,
+            ForeColor = Drawing.Color.FromArgb(0x0F, 0x0F, 0x0F),
+            Font = new Drawing.Font("Microsoft YaHei UI", 9f, Drawing.FontStyle.Regular, Drawing.GraphicsUnit.Point),
+            MinimumSize = new Drawing.Size(282, 0),
+            Padding = new Forms.Padding(6),
+            Renderer = new TrayMenuRenderer(),
+            ShowCheckMargin = false,
+            ShowImageMargin = true
+        };
+
+        menu.Items.Add(CreateTrayMenuItem("打开主界面", (_, _) => OpenMainWindow()));
+        menu.Items.Add(CreateTrayMenuItem("运行所有启用任务", (_, _) => _viewModel.RunAllEnabledCommand.Execute(null)));
+        menu.Items.Add(CreateTraySeparator());
+        menu.Items.Add(CreateTrayMenuItem("停止所有运行任务", (_, _) => _viewModel.StopAllCommand.Execute(null)));
+        _autostartMenuItem = CreateTrayMenuItem(
             BuildTrayAutostartMenuText(_viewModel.IsAdministratorAutostartEnabled),
-            image: null,
             (_, _) => _viewModel.ToggleAutostartCommand.Execute(null));
         menu.Items.Add(_autostartMenuItem);
-        menu.Items.Add("退出", null, (_, _) => ExitApplication());
+        menu.Items.Add(CreateTraySeparator());
+        menu.Items.Add(CreateTrayMenuItem("退出", (_, _) => ExitApplication()));
+        menu.Opening += (_, _) => UpdateTrayAutostartMenuText();
+        menu.Opened += (_, _) => ApplyTrayMenuRegion(menu);
+        menu.SizeChanged += (_, _) => ApplyTrayMenuRegion(menu);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
         _trayIcon = new Forms.NotifyIcon
@@ -152,7 +169,148 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _autostartMenuItem.Text = BuildTrayAutostartMenuText(_viewModel.IsAdministratorAutostartEnabled);
+        var enabled = _viewModel.IsAdministratorAutostartEnabled;
+        _autostartMenuItem.Text = BuildTrayAutostartMenuText(enabled);
+    }
+
+    private static Forms.ToolStripMenuItem CreateTrayMenuItem(
+        string text,
+        EventHandler onClick)
+    {
+        var item = new Forms.ToolStripMenuItem(text)
+        {
+            AutoSize = false,
+            ForeColor = Drawing.Color.FromArgb(0x0F, 0x0F, 0x0F),
+            Margin = Forms.Padding.Empty,
+            Padding = new Forms.Padding(28, 3, 18, 3),
+            Size = new Drawing.Size(282, 27)
+        };
+        item.Click += onClick;
+        return item;
+    }
+
+    private static Forms.ToolStripSeparator CreateTraySeparator()
+    {
+        return new Forms.ToolStripSeparator
+        {
+            Margin = new Forms.Padding(10, 0, 10, 0)
+        };
+    }
+
+    private static void ApplyTrayMenuRegion(Forms.ContextMenuStrip menu)
+    {
+        if (menu.Width <= 0 || menu.Height <= 0)
+        {
+            return;
+        }
+
+        using var path = CreateRoundedPath(new Drawing.Rectangle(0, 0, menu.Width, menu.Height), 5);
+        var previousRegion = menu.Region;
+        menu.Region = new Drawing.Region(path);
+        previousRegion?.Dispose();
+    }
+
+    private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Drawing.Rectangle bounds, int radius)
+    {
+        var path = new System.Drawing.Drawing2D.GraphicsPath();
+        var diameter = radius * 2;
+        var arc = new Drawing.Rectangle(bounds.X, bounds.Y, diameter, diameter);
+
+        path.AddArc(arc, 180, 90);
+        arc.X = bounds.Right - diameter;
+        path.AddArc(arc, 270, 90);
+        arc.Y = bounds.Bottom - diameter;
+        path.AddArc(arc, 0, 90);
+        arc.X = bounds.Left;
+        path.AddArc(arc, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    private sealed class TrayMenuRenderer : Forms.ToolStripProfessionalRenderer
+    {
+        public TrayMenuRenderer() : base(new TrayMenuColorTable())
+        {
+            RoundedEdges = true;
+        }
+
+        protected override void OnRenderToolStripBackground(Forms.ToolStripRenderEventArgs e)
+        {
+            e.Graphics.Clear(Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA));
+        }
+
+        protected override void OnRenderMenuItemBackground(Forms.ToolStripItemRenderEventArgs e)
+        {
+            if (!e.Item.Selected)
+            {
+                return;
+            }
+
+            var bounds = new Drawing.Rectangle(7, 1, Math.Max(1, e.Item.Width - 14), Math.Max(1, e.Item.Height - 2));
+            using var path = CreateRoundedPath(bounds, 4);
+            using var brush = new Drawing.SolidBrush(Drawing.Color.FromArgb(0xEE, 0xEE, 0xEE));
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.FillPath(brush, path);
+        }
+
+        protected override void OnRenderItemText(Forms.ToolStripItemTextRenderEventArgs e)
+        {
+            if (e.Item is not Forms.ToolStripMenuItem)
+            {
+                base.OnRenderItemText(e);
+                return;
+            }
+
+            var bounds = new Drawing.Rectangle(44, 0, Math.Max(1, e.Item.Width - 56), e.Item.Height);
+            Forms.TextRenderer.DrawText(
+                e.Graphics,
+                e.Text,
+                e.TextFont,
+                bounds,
+                e.TextColor,
+                Forms.TextFormatFlags.Left
+                | Forms.TextFormatFlags.VerticalCenter
+                | Forms.TextFormatFlags.SingleLine
+                | Forms.TextFormatFlags.NoPrefix
+                | Forms.TextFormatFlags.NoPadding
+                | Forms.TextFormatFlags.PreserveGraphicsClipping);
+        }
+
+        protected override void OnRenderToolStripBorder(Forms.ToolStripRenderEventArgs e)
+        {
+            var bounds = new Drawing.Rectangle(0, 0, Math.Max(1, e.ToolStrip.Width - 1), Math.Max(1, e.ToolStrip.Height - 1));
+            using var path = CreateRoundedPath(bounds, 5);
+            using var pen = new Drawing.Pen(Drawing.Color.FromArgb(0xD8, 0xD8, 0xD8));
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.DrawPath(pen, path);
+        }
+
+        protected override void OnRenderSeparator(Forms.ToolStripSeparatorRenderEventArgs e)
+        {
+            using var pen = new Drawing.Pen(Drawing.Color.FromArgb(0xDA, 0xDA, 0xDA));
+            var y = e.Item.Height / 2;
+            e.Graphics.DrawLine(pen, 8, y, e.Item.Width - 8, y);
+        }
+    }
+
+    private sealed class TrayMenuColorTable : Forms.ProfessionalColorTable
+    {
+        private static readonly Drawing.Color Hover = Drawing.Color.FromArgb(0xEE, 0xEE, 0xEE);
+
+        public override Drawing.Color ToolStripDropDownBackground => Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
+        public override Drawing.Color ImageMarginGradientBegin => Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
+        public override Drawing.Color ImageMarginGradientMiddle => Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
+        public override Drawing.Color ImageMarginGradientEnd => Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
+        public override Drawing.Color MenuBorder => Drawing.Color.FromArgb(0xD8, 0xD8, 0xD8);
+        public override Drawing.Color MenuItemBorder => Hover;
+        public override Drawing.Color MenuItemSelected => Hover;
+        public override Drawing.Color MenuItemSelectedGradientBegin => Hover;
+        public override Drawing.Color MenuItemSelectedGradientEnd => Hover;
+        public override Drawing.Color MenuItemPressedGradientBegin => Hover;
+        public override Drawing.Color MenuItemPressedGradientMiddle => Hover;
+        public override Drawing.Color MenuItemPressedGradientEnd => Hover;
+        public override Drawing.Color SeparatorDark => Drawing.Color.FromArgb(0xDA, 0xDA, 0xDA);
+        public override Drawing.Color SeparatorLight => Drawing.Color.FromArgb(0xDA, 0xDA, 0xDA);
     }
 
     private static Drawing.Icon CreateTrayIconImage()
@@ -301,9 +459,11 @@ public partial class App : System.Windows.Application
 
     private void DisposeTrayIcon()
     {
+        var trayMenu = _trayIcon?.ContextMenuStrip;
         try
         {
             _trayIcon?.Dispose();
+            trayMenu?.Dispose();
         }
         catch (Exception ex)
         {
