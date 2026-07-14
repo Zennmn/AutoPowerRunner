@@ -121,6 +121,90 @@
             </Setter>
         </Style>
 
+        <Style x:Key="TrayContextMenu" TargetType="ContextMenu">
+            <Setter Property="MinWidth" Value="176" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Margin="4"
+                                Padding="6"
+                                Background="#FAFAFA"
+                                BorderBrush="#D8D8D8"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12"
+                                                  Direction="270"
+                                                  ShadowDepth="3"
+                                                  Opacity="0.18"
+                                                  Color="#000000" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TrayMenuItem" TargetType="MenuItem">
+            <Setter Property="Height" Value="27" />
+            <Setter Property="Padding" Value="28,0,18,0" />
+            <Setter Property="Foreground" Value="#0F0F0F" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="MenuItemBorder"
+                                Margin="1"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="MenuItemBorder" Property="Background" Value="#EEEEEE" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#9CA3AF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TrayMenuSeparator" TargetType="Separator">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Grid Background="Transparent">
+                            <Border Height="1"
+                                    Margin="10,0"
+                                    VerticalAlignment="Center"
+                                    Background="#DADADA" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
             <Setter Property="FontSize" Value="14" />
@@ -289,9 +373,9 @@
                                     Style="{StaticResource PrimaryButton}"
                                     Click="AddTask_Click">
                                 <Button.ContextMenu>
-                                    <ContextMenu Placement="Bottom">
-                                        <MenuItem Header="添加 PowerShell 脚本" Click="ImportPowerShellScript_Click" />
-                                        <MenuItem Header="添加 EXE 程序" Click="ImportExecutable_Click" />
+                                    <ContextMenu Placement="Bottom" Style="{StaticResource TrayContextMenu}">
+                                        <MenuItem Header="添加 PowerShell 脚本" Style="{StaticResource TrayMenuItem}" Click="ImportPowerShellScript_Click" />
+                                        <MenuItem Header="添加 EXE 程序" Style="{StaticResource TrayMenuItem}" Click="ImportExecutable_Click" />
                                     </ContextMenu>
                                 </Button.ContextMenu>
                                 <StackPanel Orientation="Horizontal">
@@ -312,10 +396,11 @@
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  ToolTip="右键可编辑或删除任务">
                             <ListBox.ContextMenu>
-                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                    <MenuItem Header="编辑任务" Click="EditTask_Click" />
-                                    <Separator />
-                                    <MenuItem Header="删除任务" Command="{Binding DeleteSelectedCommand}" />
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                             Style="{StaticResource TrayContextMenu}">
+                                    <MenuItem Header="编辑任务" Style="{StaticResource TrayMenuItem}" Click="EditTask_Click" />
+                                    <Separator Style="{StaticResource TrayMenuSeparator}" />
+                                    <MenuItem Header="删除任务" Style="{StaticResource TrayMenuItem}" Command="{Binding DeleteSelectedCommand}" />
                                 </ContextMenu>
                             </ListBox.ContextMenu>
                             <ListBox.ItemTemplate>

@@ -18,9 +18,6 @@ public partial class TaskEditorWindow : Window
         _task = task?.Clone() ?? new ManagedTask();
         Result = _task.Clone();
 
-        TypeBox.ItemsSource = Enum.GetValues<ManagedTaskType>();
-        RunModeBox.ItemsSource = Enum.GetValues<ManagedTaskRunMode>();
-
         LoadFields(_task);
     }
 
@@ -29,11 +26,13 @@ public partial class TaskEditorWindow : Window
     private void LoadFields(ManagedTask task)
     {
         NameBox.Text = task.Name;
-        TypeBox.SelectedItem = task.Type;
+        TypeValue.Text = task.Type == ManagedTaskType.Executable ? "EXE 程序" : "PowerShell 脚本";
         PathBox.Text = task.Path;
         ArgumentsBox.Text = task.Arguments;
         WorkingDirectoryBox.Text = task.WorkingDirectory;
-        RunModeBox.SelectedItem = task.RunMode;
+        RunModeValue.Text = task.RunMode == ManagedTaskRunMode.LongRunning
+            ? "长期运行（失败自动重启）"
+            : "运行一次";
         EnabledBox.IsChecked = task.IsEnabled;
     }
 
@@ -69,7 +68,7 @@ public partial class TaskEditorWindow : Window
             return;
         }
 
-        var selectedType = TypeBox.SelectedItem is ManagedTaskType taskType ? taskType : ManagedTaskType.PowerShellScript;
+        var selectedType = _task.Type;
         var path = PathBox.Text.Trim();
         if (!File.Exists(path))
         {
@@ -101,7 +100,7 @@ public partial class TaskEditorWindow : Window
             Path = path,
             Arguments = ArgumentsBox.Text.Trim(),
             WorkingDirectory = workingDirectory,
-            RunMode = RunModeBox.SelectedItem is ManagedTaskRunMode runMode ? runMode : ManagedTaskRunMode.RunOnce,
+            RunMode = _task.RunMode,
             IsEnabled = EnabledBox.IsChecked == true,
             LastResult = _task.LastResult
         };
@@ -111,7 +110,7 @@ public partial class TaskEditorWindow : Window
 
     private string GetFileFilter()
     {
-        return TypeBox.SelectedItem is ManagedTaskType.Executable
+        return _task.Type == ManagedTaskType.Executable
             ? "EXE 程序 (*.exe)|*.exe|所有文件 (*.*)|*.*"
             : "PowerShell 脚本 (*.ps1)|*.ps1|所有文件 (*.*)|*.*";
     }
