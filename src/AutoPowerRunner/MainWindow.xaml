@@ -256,14 +256,17 @@
         </Style>
 
         <Style x:Key="StatusChip" TargetType="Border">
-            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Padding" Value="8,3" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Background" Value="#F1F3F6" />
+            <Setter Property="BorderBrush" Value="#DDE2EA" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="TextElement.Foreground" Value="#7B8493" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding LastResult.Status}" Value="Running">
-                    <Setter Property="Background" Value="#E7F2FF" />
-                    <Setter Property="TextElement.Foreground" Value="#1473D4" />
+                    <Setter Property="Background" Value="#DCEBFF" />
+                    <Setter Property="BorderBrush" Value="#8DBBF2" />
+                    <Setter Property="TextElement.Foreground" Value="#0B6BCB" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding LastResult.Status}" Value="Restarting">
                     <Setter Property="Background" Value="#FFF4E5" />
